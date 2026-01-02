@@ -46,7 +46,7 @@ logs/
 
 # Data and models
 data/
-models/
+/models/
 *.db
 *.sqlite
 *.sqlite3

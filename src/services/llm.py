@@ -8,7 +8,8 @@ from typing import List, Optional, Dict, Any
 
 # Gemini API import
 try:
-    import google.generativeai as genai
+    from google import genai
+    from google.genai import types
     GEMINI_AVAILABLE = True
 except ImportError:
     GEMINI_AVAILABLE = False
@@ -45,10 +46,9 @@ class LLMService:
         self.mode = config.llm.primary_mode
 
         # Initialize Gemini API
-        self.gemini_model = None
+        self.gemini_client = None
         if GEMINI_AVAILABLE and config.gemini_api_key and self.mode in ["api", "hybrid"]:
-            genai.configure(api_key=config.gemini_api_key)
-            self.gemini_model = genai.GenerativeModel(config.llm.api_model)
+            self.gemini_client = genai.Client(api_key=config.gemini_api_key)
 
         # Ollama is initialized per-request (no persistent connection needed)
         self.ollama_available = OLLAMA_AVAILABLE and self.mode in ["local", "hybrid"]
@@ -169,14 +169,15 @@ class LLMService:
         if not GEMINI_AVAILABLE:
             raise RuntimeError("Gemini library not available")
 
-        if self.gemini_model is None:
-            raise RuntimeError("Gemini model not initialized (check API key)")
+        if self.gemini_client is None:
+            raise RuntimeError("Gemini client not initialized (check API key)")
 
         try:
             # Generate response with Gemini
-            response = self.gemini_model.generate_content(
-                prompt,
-                generation_config=genai.types.GenerationConfig(
+            response = self.gemini_client.models.generate_content(
+                model=self.config.llm.api_model,
+                contents=prompt,
+                config=types.GenerateContentConfig(
                     temperature=self.config.llm.temperature,
                     max_output_tokens=self.config.llm.max_tokens,
                 )
@@ -236,7 +237,7 @@ class LLMService:
         prompt = f"{self.config.llm.system_prompt}\n\nGenerate a brief confirmation (1 sentence) for this action: {action_description}"
 
         try:
-            if self.mode in ["api", "hybrid"] and self.gemini_model:
+            if self.mode in ["api", "hybrid"] and self.gemini_client:
                 return self._generate_api(prompt)
             else:
                 return self._generate_local(prompt)
