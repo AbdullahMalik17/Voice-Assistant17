@@ -1,0 +1,84 @@
+# Voice Assistant Baseline - Dependencies
+# Python 3.10+
+
+# ===========================
+# Core Framework
+# ===========================
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+pydantic==2.5.3
+pydantic-settings==2.1.0
+
+# ===========================
+# Audio Processing
+# ===========================
+pyaudio==0.2.14
+sounddevice==0.4.6
+soundfile==0.12.1
+numpy==1.26.3
+
+# ===========================
+# Wake Word Detection
+# ===========================
+pvporcupine==3.0.2
+
+# ===========================
+# Speech-to-Text (STT)
+# ===========================
+openai-whisper==20231117
+openai==1.10.0  # For Whisper API fallback
+
+# ===========================
+# Language Models (LLM)
+# ===========================
+google-generativeai==0.3.2  # Gemini API
+# Ollama Python client for local LLM
+ollama==0.1.6
+
+# ===========================
+# Text-to-Speech (TTS)
+# ===========================
+elevenlabs==0.2.27
+# Piper TTS (local fallback)
+piper-tts==1.2.0
+
+# ===========================
+# Browser Automation
+# ===========================
+playwright==1.41.0
+
+# ===========================
+# Cryptography & Security
+# ===========================
+cryptography==42.0.2
+python-dotenv==1.0.0
+
+# ===========================
+# Logging & Monitoring
+# ===========================
+prometheus-client==0.19.0
+python-json-logger==2.0.7
+
+# ===========================
+# System Utilities
+# ===========================
+psutil==5.9.7  # System status monitoring
+pyyaml==6.0.1  # YAML configuration
+requests==2.31.0  # HTTP requests
+
+# ===========================
+# Testing
+# ===========================
+pytest==7.4.4
+pytest-asyncio==0.23.3
+pytest-cov==4.1.0
+pytest-mock==3.12.0
+httpx==0.26.0  # For FastAPI testing
+
+# ===========================
+# Development Tools
+# ===========================
+black==23.12.1
+flake8==7.0.0
+mypy==1.8.0
+isort==5.13.2

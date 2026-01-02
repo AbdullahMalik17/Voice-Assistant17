@@ -1,4 +1,4 @@
-# Claude Code Rules
+﻿# Claude Code Rules
 
 This file is generated during init for the selected agent.
 
@@ -31,7 +31,41 @@ Agents MUST prioritize and use MCP tools and CLI commands for all information ga
 ### 2. Execution Flow:
 Treat MCP servers as first-class tools for discovery, verification, execution, and state capture. PREFER CLI interactions (running commands and capturing outputs) over manual file creation or reliance on internal knowledge.
 
-### 3. Knowledge capture (PHR) for Every User Input.
+### 3. Documentation Lookup via Context7 MCP:
+For ALL library, framework, or package documentation queries, MUST use Context7 MCP tools to retrieve up-to-date information. NEVER rely on internal knowledge for library-specific APIs, examples, or usage patterns.
+
+**Context7 Workflow:**
+1. **Resolve Library ID First**: Call `mcp__context7__resolve-library-id` with:
+   - `libraryName`: The library/package name to search for
+   - `query`: The user's original question (provides ranking context)
+   - Returns Context7-compatible library ID (format: `/org/project` or `/org/project/version`)
+   - Skip this step ONLY if user explicitly provides a library ID in the format `/org/project`
+
+2. **Query Documentation**: Call `mcp__context7__query-docs` with:
+   - `libraryId`: The exact ID from resolve-library-id or user-provided ID
+   - `query`: Specific question about the library (be detailed and specific)
+   - Returns up-to-date documentation, code examples, and best practices
+
+**Important Constraints:**
+- Maximum 3 calls per question (resolve + query attempts combined)
+- If no match after 3 attempts, use best available result or ask user for clarification
+- Good queries: "How to set up JWT authentication in Express.js", "React useEffect cleanup examples"
+- Bad queries: "auth", "hooks" (too vague)
+- NEVER include sensitive data (API keys, passwords, credentials) in queries
+
+**When to Use:**
+- Questions about library/framework APIs, methods, or classes
+- Implementation patterns and best practices for specific libraries
+- Code examples for library-specific functionality
+- Version-specific behavior or migration guides
+- Troubleshooting library-specific errors
+
+**When NOT to Use:**
+- General programming concepts not tied to a specific library
+- Project-specific code (use codebase exploration instead)
+- Questions already answered by reading local project files
+
+### 4. Knowledge capture (PHR) for Every User Input.
 After completing requests, you **MUST** create a PHR (Prompt History Record).
 
 **When to create PHRs:**
@@ -101,12 +135,12 @@ After completing requests, you **MUST** create a PHR (Prompt History Record).
    - On any failure: warn but do not block the main command.
    - Skip PHR only for `/sp.phr` itself.
 
-### 4. Explicit ADR suggestions
+### 5. Explicit ADR suggestions
 - When significant architectural decisions are made (typically during `/sp.plan` and sometimes `/sp.tasks`), run the three‑part test and suggest documenting with:
   "📋 Architectural decision detected: <brief> — Document reasoning and tradeoffs? Run `/sp.adr <decision-title>`"
 - Wait for user consent; never auto‑create the ADR.
 
-### 5. Human as Tool Strategy
+### 6. Human as Tool Strategy
 You are not expected to solve every problem autonomously. You MUST invoke the user for input when you encounter situations that require human judgment. Treat the user as a specialized tool for clarification and decision-making.
 
 **Invocation Triggers:**

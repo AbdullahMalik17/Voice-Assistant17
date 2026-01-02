@@ -1,0 +1,113 @@
+# Voice Assistant Configuration
+# Main configuration file for the voice assistant system
+
+assistant:
+  name: "Assistant"
+  wake_word: "Hey Assistant"
+  version: "1.0.0-baseline"
+
+# Audio input/output configuration
+audio:
+  sample_rate: 16000  # Hz
+  channels: 1  # 1=mono, 2=stereo
+  chunk_size: 1024  # Bytes per audio chunk
+  input_device: null  # null = system default
+  output_device: null  # null = system default
+
+# Conversation context management
+context:
+  max_exchanges: 5  # Maximum conversation exchanges to remember
+  timeout_seconds: 300  # 5 minutes
+  topic_shift_threshold: 0.7  # Similarity threshold for topic change detection
+  enable_persistence: false  # Override with .env variable
+
+# Network resilience
+network:
+  check_interval_seconds: 5  # Health check frequency
+  retry_delay_seconds: 30  # Delay before retrying failed requests
+  max_queue_items: 10  # Maximum queued requests during outage
+  health_check_url: "https://www.google.com"  # URL for connectivity check
+  dns_fallback: "8.8.8.8"  # DNS server for fallback check
+
+# Action execution settings
+actions:
+  require_confirmation: false  # Require spoken confirmation before execution
+  timeout_seconds: 30  # Maximum execution time
+  allowed_commands:  # Whitelist of allowed system commands
+    - "open"  # Application launcher
+    - "status"  # System status queries
+  blocked_patterns:  # Patterns to block for safety
+    - "rm -rf"
+    - "del /f"
+    - "format"
+
+# Logging and monitoring
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  format: "json"  # json or text
+  event_log_max_size_mb: 10  # Max size before rotation
+  event_log_backup_count: 5  # Number of backup files
+  metrics_export_interval_seconds: 60  # Metrics export frequency
+  console_output: true  # Also log to console
+
+# Wake word detection
+wake_word:
+  library: "pvporcupine"  # Wake word detection library
+  sensitivity: 0.5  # Detection sensitivity (0.0-1.0)
+  model_path: "models/wake_word/"  # Path to wake word models
+
+# Speech-to-Text (STT)
+stt:
+  primary_mode: "hybrid"  # local, api, or hybrid
+  local_model: "whisper-base"  # Local Whisper model size
+  api_provider: "openai"  # API provider when in API mode
+  language: "en"  # Primary language
+  fallback_timeout_ms: 2000  # Fallback to API after this latency
+
+# Language Model (LLM)
+llm:
+  primary_mode: "hybrid"  # local, api, or hybrid
+  api_provider: "gemini"  # gemini or openai
+  api_model: "gemini-pro"  # Model name for API
+  local_provider: "ollama"  # Local LLM provider
+  local_model: "llama2:7b"  # Local model name
+  temperature: 0.7  # Response creativity (0.0-1.0)
+  max_tokens: 150  # Maximum response length
+  system_prompt: "You are a helpful voice assistant. Provide concise, spoken-friendly responses."
+
+# Text-to-Speech (TTS)
+tts:
+  primary_mode: "hybrid"  # local, api, or hybrid
+  api_provider: "elevenlabs"  # API provider
+  local_provider: "piper"  # Local TTS provider
+  voice: "default"  # Voice selection
+  speed: 1.0  # Speech speed multiplier
+  quality: "medium"  # low, medium, high (affects latency)
+
+# Intent classification
+intent:
+  confidence_threshold: 0.6  # Minimum confidence to act on intent
+  types:
+    - "INFORMATIONAL"  # Questions, queries
+    - "TASK_BASED"  # Commands, actions
+    - "CONVERSATIONAL"  # Casual conversation
+  entity_extraction: true  # Extract entities from user input
+
+# Performance targets (for monitoring)
+performance:
+  wake_word_activation_ms: 1000  # Target: <1s
+  query_processing_ms: 2000  # Target: <2s
+  end_to_end_ms: 3000  # Target: <3s (wake to response)
+
+# Platform-specific settings
+platform:
+  auto_detect: true  # Auto-detect OS and adjust settings
+  windows:
+    audio_backend: "pyaudio"
+  macos:
+    audio_backend: "sounddevice"
+  linux:
+    audio_backend: "pyaudio"
+  raspberry_pi:
+    audio_backend: "pyaudio"
+    low_power_mode: true  # Optimize for Raspberry Pi resources

@@ -1,55 +1,116 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+# Voice_Assistant Constitution
 
-## Core Principles
+## Core Objective
+To develop a responsive, privacy-centric, and highly extensible AI-powered voice assistant capable of natural language understanding and task automation.
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
+## Guiding Principles
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+### 1. Privacy First
+All voice processing should aim for local execution where possible. User data must never be stored without explicit consent.
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+### 2. Latency Optimization
+Responses must be generated and spoken within sub-500ms thresholds to maintain natural conversation flow.
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
+### 3. Modular Architecture
+The system must decouple the **STT** (Speech-to-Text), **LLM** (Logic Engine), and **TTS** (Text-to-Speech) layers to allow for easy hardware/software swapping.
 
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
+### 4. Reliability
+The system should handle intermittent internet connectivity gracefully using "Edge-first" logic.
 
-### [PRINCIPLE_6_NAME]
+### 5. System-Wide Control & Automation
+The agent must have full system control capabilities to execute complex automation tasks, interact with web applications, and perform desktop operations through browser-based interfaces using Playwright.
 
+## Technical Stack (Baseline)
 
-[PRINCIPLE__DESCRIPTION]
+- **Language**: Python 3.10+
+- **STT**: OpenAI Whisper (Local/API)
+- **Brain**: Gemini API / Ollama (Local fallback)
+- **TTS**: ElevenLabs or Piper (for fast local synthesis)
+- **Framework**: FastAPI for the backend service layer
+- **System Control**: Playwright MCP Server for laptop/desktop automation
 
-## [SECTION_2_NAME]
-<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
+## System Control & Automation Framework
 
-[SECTION_2_CONTENT]
-<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
+### Playwright Integration for System Control
 
-## [SECTION_3_NAME]
-<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
+The agent has full access to Playwright MCP tools for comprehensive system control and automation. This enables interaction with web applications, desktop software (via browser interfaces), and system-level operations.
 
-[SECTION_3_CONTENT]
-<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
+#### Core Capabilities
 
-## Governance
-<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
+**1. Browser Automation & Control**
+- Navigate to any URL (`browser_navigate`)
+- Take snapshots and screenshots for visual feedback (`browser_snapshot`, `browser_take_screenshot`)
+- Execute JavaScript for advanced interactions (`browser_evaluate`)
+- Monitor console messages and network requests (`browser_console_messages`, `browser_network_requests`)
+- Handle browser dialogs, file uploads, and forms (`browser_handle_dialog`, `browser_file_upload`, `browser_fill_form`)
 
-[GOVERNANCE_RULES]
-<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
+**2. User Interface Interaction**
+- Click elements, buttons, and links (`browser_click`)
+- Type text into input fields (`browser_type`)
+- Fill complex forms with multiple fields (`browser_fill_form`)
+- Select dropdown options (`browser_select_option`)
+- Drag and drop elements (`browser_drag`)
+- Hover over elements (`browser_hover`)
+- Press keyboard keys (`browser_press_key`)
 
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+**3. Advanced Automation**
+- Run custom Playwright code snippets (`browser_run_code`)
+- Multi-tab management (`browser_tabs`)
+- Wait for content to appear/disappear (`browser_wait_for`)
+- Resize browser windows (`browser_resize`)
+- Navigate backward through history (`browser_navigate_back`)
+
+**4. Visual Monitoring & Debugging**
+- Capture full-page or element-specific screenshots
+- Generate accessibility snapshots for better element targeting
+- Monitor network traffic and API calls
+- Track console errors and warnings
+
+#### Automation Policies
+
+**Authorization & Safety:**
+- Always confirm destructive actions with user before executing
+- Never automate financial transactions without explicit user confirmation
+- Respect authentication boundaries - ask for credentials, never hardcode
+- Use accessibility snapshots over screenshots for element interaction (more reliable)
+
+**Best Practices:**
+- Use `browser_snapshot` before any interaction to understand page structure
+- Prefer `browser_fill_form` for multi-field forms (more efficient)
+- Always verify element references from snapshots before clicking/typing
+- Monitor console errors after navigation to catch issues early
+- Use `browser_wait_for` when dealing with dynamic content
+- Limit screenshot usage to visual confirmation only (not for element targeting)
+
+**Execution Strategy:**
+1. **Plan First**: Understand user's automation goal completely
+2. **Navigate**: Open the target URL or application
+3. **Snapshot**: Capture page structure using `browser_snapshot`
+4. **Interact**: Perform actions using exact element references from snapshot
+5. **Verify**: Take screenshots or check console for confirmation
+6. **Report**: Provide clear feedback on success/failure
+
+**Use Cases Enabled:**
+- Web scraping and data extraction
+- Form automation and data entry
+- Testing web applications
+- Monitoring dashboards and applications
+- Interacting with web-based system tools
+- Automating repetitive browser-based tasks
+- Controlling web-based IoT devices or control panels
+- Accessing cloud-based system administration interfaces
+
+#### Integration with Voice Assistant
+
+The Playwright system control capabilities should be seamlessly integrated with voice commands:
+- User can issue voice commands for browser automation
+- Agent executes Playwright operations based on natural language intent
+- Visual feedback (screenshots) can be analyzed and described back to user
+- Multi-step automation workflows can be triggered by single voice commands
+
+**Example Voice Workflows:**
+- "Open Gmail and check my unread messages"
+- "Fill out this form with my information"
+- "Navigate to the settings page and enable dark mode"
+- "Monitor this dashboard and alert me if status changes"
+- "Take a screenshot of the current page"
