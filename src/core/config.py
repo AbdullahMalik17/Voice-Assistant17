@@ -100,7 +100,7 @@ class LLMConfig(BaseModel):
     """Language Model configuration"""
     primary_mode: str = Field(default="hybrid")
     api_provider: str = "gemini"
-    api_model: str = "gemini-pro"
+    api_model: str = "gemini-1.5-flash"
     local_provider: str = "ollama"
     local_model: str = "llama2:7b"
     temperature: float = Field(default=0.7, ge=0.0, le=2.0)

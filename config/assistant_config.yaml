@@ -68,7 +68,7 @@ stt:
 llm:
   primary_mode: "hybrid"  # local, api, or hybrid
   api_provider: "gemini"  # gemini or openai
-  api_model: "gemini-pro"  # Model name for API
+  api_model: "gemini-1.5-flash"  # Model name for API
   local_provider: "ollama"  # Local LLM provider
   local_model: "llama2:7b"  # Local model name
   temperature: 0.7  # Response creativity (0.0-1.0)
