@@ -1,7 +1,17 @@
 {
   "permissions": {
     "allow": [
-      "Bash(powershell.exe:*)"
+      "Bash(powershell.exe:*)",
+      "Bash(bash scripts/install_dependencies.sh:*)",
+      "Bash(source venv/Scripts/activate)",
+      "Bash(python src/cli/assistant.py:*)",
+      "Bash(python test_assistant.py:*)",
+      "Bash(python -c:*)",
+      "mcp__context7__resolve-library-id",
+      "mcp__context7__query-docs",
+      "Bash(python -m pip install:*)",
+      "Bash(python test_manual_validation.py:*)",
+      "Bash(python:*)"
     ]
   }
 }

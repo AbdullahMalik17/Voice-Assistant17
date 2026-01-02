@@ -173,24 +173,24 @@ Single project structure:
 
 ### Network Resilience (FR-025, FR-026, FR-027)
 
-- [ ] T075 [P] Implement request queuing in src/core/request_queue.py for network outages
-- [ ] T076 [P] Integrate network monitor with request queue (auto-retry on restore)
-- [ ] T077 Implement "Waiting for connection" spoken notification on network loss
-- [ ] T078 Add queued request processing on network restoration
-- [ ] T079 Test offline mode: wake word and local commands work without internet (manual validation)
-- [ ] T080 Test request queuing: ask online query while offline, verify processes when online (manual validation)
+- [x] T075 [P] Implement request queuing in src/core/request_queue.py for network outages
+- [x] T076 [P] Integrate network monitor with request queue (auto-retry on restore)
+- [x] T077 Implement "Waiting for connection" spoken notification on network loss
+- [x] T078 Add queued request processing on network restoration
+- [x] T079 Test offline mode: wake word and local commands work without internet (manual validation)
+- [x] T080 Test request queuing: ask online query while offline, verify processes when online (manual validation)
 
 ### Interruption Handling (FR-024)
 
-- [ ] T081 Implement wake word interrupt handling during active processing
-- [ ] T082 Implement task cancellation and state cleanup on interrupt
-- [ ] T083 Test interruption: say wake word during LLM response, verify cancellation (manual validation)
+- [x] T081 Implement wake word interrupt handling during active processing
+- [x] T082 Implement task cancellation and state cleanup on interrupt
+- [x] T083 Test interruption: say wake word during LLM response, verify cancellation (manual validation)
 
 ### Configuration & Deployment
 
-- [ ] T084 [P] Create deployment guide in docs/deployment.md
-- [ ] T085 [P] Update quickstart.md with final installation and usage instructions
-- [ ] T086 [P] Create troubleshooting guide in docs/troubleshooting.md
+- [x] T084 [P] Create deployment guide in docs/deployment.md
+- [x] T085 [P] Update quickstart.md with final installation and usage instructions
+- [x] T086 [P] Create troubleshooting guide in docs/troubleshooting.md
 - [ ] T087 Test full quickstart.md flow on clean system (Windows, macOS, Linux validation)
 
 ---
@@ -199,14 +199,14 @@ Single project structure:
 
 **Purpose**: Final improvements and validation
 
-- [ ] T088 [P] Code cleanup and refactoring for consistency
-- [ ] T089 [P] Performance profiling and optimization (verify <3s wake-to-response)
-- [ ] T090 [P] Security audit: verify no hardcoded secrets, proper encryption
-- [ ] T091 [P] Accessibility validation: verify cross-platform audio compatibility
-- [ ] T092 [P] Documentation review and updates
-- [ ] T093 [P] Create example voice command reference in docs/commands.md
-- [ ] T094 Validate all success criteria from spec.md (SC-001 through SC-010)
-- [ ] T095 Run full system validation on Raspberry Pi 4 (performance within constraints)
+- [x] T088 [P] Code cleanup and refactoring for consistency
+- [x] T089 [P] Performance profiling and optimization (verify <3s wake-to-response)
+- [x] T090 [P] Security audit: verify no hardcoded secrets, proper encryption
+- [x] T091 [P] Accessibility validation: verify cross-platform audio compatibility
+- [x] T092 [P] Documentation review and updates
+- [x] T093 [P] Create example voice command reference in docs/commands.md
+- [x] T094 Validate all success criteria from spec.md (SC-001 through SC-010)
+- [x] T095 Run full system validation on Raspberry Pi 4 (performance within constraints)
 
 ---
 

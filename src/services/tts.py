@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Optional
 
 try:
-    from elevenlabs import generate, set_api_key, voices
+    from elevenlabs import ElevenLabs
     ELEVENLABS_AVAILABLE = True
 except ImportError:
     ELEVENLABS_AVAILABLE = False
@@ -43,9 +43,10 @@ class TTSService:
         self.audio_utils = audio_utils
         self.mode = config.tts.primary_mode
 
-        # Initialize API keys
+        # Initialize ElevenLabs client
+        self.elevenlabs_client = None
         if config.elevenlabs_api_key and ELEVENLABS_AVAILABLE:
-            set_api_key(config.elevenlabs_api_key)
+            self.elevenlabs_client = ElevenLabs(api_key=config.elevenlabs_api_key)
 
     def synthesize(self, text: str, play_audio: bool = True) -> Optional[bytes]:
         """
@@ -97,8 +98,7 @@ class TTSService:
             self.logger.tts_completed(
                 text_length=len(text),
                 audio_duration_ms=duration_ms,
-                mode=mode_used,
-                success=success
+                mode=mode_used
             )
 
             # Record metrics
@@ -115,18 +115,21 @@ class TTSService:
         if not ELEVENLABS_AVAILABLE:
             raise RuntimeError("ElevenLabs library not available")
 
-        if not self.config.elevenlabs_api_key:
+        if self.elevenlabs_client is None:
             raise RuntimeError("ElevenLabs API key not configured")
 
         try:
-            # Generate audio using ElevenLabs
-            audio_generator = generate(
+            # Generate audio using ElevenLabs v2 API
+            # Using text_to_speech.convert() method
+            # Use PCM format for direct playback compatibility
+            audio_generator = self.elevenlabs_client.text_to_speech.convert(
+                voice_id="JBFqnCBsd6RMkjVDRZzb",  # Rachel voice (default)
                 text=text,
-                voice=self.config.tts.voice,
-                model="eleven_monolingual_v1"
+                model_id="eleven_multilingual_v2",
+                output_format="pcm_16000"  # PCM format at 16kHz (matches our audio config)
             )
 
-            # Collect audio bytes
+            # Collect audio bytes from generator
             audio_bytes = b''
             for chunk in audio_generator:
                 audio_bytes += chunk

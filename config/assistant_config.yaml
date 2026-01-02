@@ -86,7 +86,7 @@ tts:
 
 # Intent classification
 intent:
-  confidence_threshold: 0.6  # Minimum confidence to act on intent
+  confidence_threshold: 0.4  # Minimum confidence to act on intent
   types:
     - "INFORMATIONAL"  # Questions, queries
     - "TASK_BASED"  # Commands, actions

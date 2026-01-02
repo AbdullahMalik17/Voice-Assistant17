@@ -31,8 +31,10 @@ Agents MUST prioritize and use MCP tools and CLI commands for all information ga
 ### 2. Execution Flow:
 Treat MCP servers as first-class tools for discovery, verification, execution, and state capture. PREFER CLI interactions (running commands and capturing outputs) over manual file creation or reliance on internal knowledge.
 
-### 3. Documentation Lookup via Context7 MCP:
+### 3. Documentation Lookup via Context7 MCP (MANDATORY BEFORE CODING):
 For ALL library, framework, or package documentation queries, MUST use Context7 MCP tools to retrieve up-to-date information. NEVER rely on internal knowledge for library-specific APIs, examples, or usage patterns.
+
+**CRITICAL RULE: Always use Context7 BEFORE writing code that uses external libraries. No exceptions.**
 
 **Context7 Workflow:**
 1. **Resolve Library ID First**: Call `mcp__context7__resolve-library-id` with:

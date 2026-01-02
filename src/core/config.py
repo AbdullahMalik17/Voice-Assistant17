@@ -215,6 +215,7 @@ class Config:
         self.openai_api_key = os.getenv('OPENAI_API_KEY')
         self.gemini_api_key = os.getenv('GEMINI_API_KEY')
         self.elevenlabs_api_key = os.getenv('ELEVENLABS_API_KEY')
+        self.picovoice_access_key = os.getenv('PICOVOICE_ACCESS_KEY')
 
         # Service modes
         if os.getenv('STT_MODE'):

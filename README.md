@@ -43,9 +43,40 @@ chmod +x scripts/setup_wake_word.sh
 # Activate virtual environment
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 
-# Run the assistant
+# Run the assistant (full mode with wake word)
 python src/cli/assistant.py
+
+# Or run test mode without wake word (keyboard trigger)
+python test_assistant.py
 ```
+
+### Test Mode Commands
+
+When running `test_assistant.py`, try these voice commands:
+
+**Conversational**:
+- "Hello, how are you?"
+- "Tell me a joke"
+- "What's your name?"
+
+**Informational**:
+- "What time is it?"
+- "What's the weather like?" (requires internet)
+
+**System Status**:
+- "Check my CPU"
+- "Show memory status"
+- "What's my disk space?"
+- "Check battery" (laptops only)
+
+**Application Launching**:
+- "Open Spotify"
+- "Open Notepad" (Windows)
+- "Open browser"
+
+**Context-Aware Follow-ups**:
+- "What's the weather today?" → "What about tomorrow?"
+- "Tell me about Python" → "What are its key features?"
 
 ## Architecture
 
@@ -126,18 +157,40 @@ pytest --cov=src --cov-report=html
 
 ## Development Status
 
-**Current Phase**: Phase 1 - Setup (In Progress)
+**Current Phase**: Phase 6 - Action Execution (Completed) ✅
 
 **Roadmap**:
 - [x] Specification and planning complete
-- [ ] Phase 1: Setup (T001-T010)
-- [ ] Phase 2: Foundational infrastructure (T011-T021)
-- [ ] Phase 3: Wake word activation (T022-T031)
-- [ ] Phase 4: Intent recognition (T032-T046)
-- [ ] Phase 5: Context management (T047-T059)
-- [ ] Phase 6: Action execution (T060-T074)
+- [x] Phase 1: Setup (T001-T010) ✅
+- [x] Phase 2: Foundational infrastructure (T011-T021) ✅
+- [x] Phase 3: Wake word activation (T022-T031) ✅ (Tested without wake word)
+- [x] Phase 4: Intent recognition (T032-T046) ✅
+- [x] Phase 5: Context management (T047-T059) ✅
+- [x] Phase 6: Action execution (T060-T074) ✅
 - [ ] Phase 7: Cross-cutting concerns (T075-T087)
 - [ ] Phase 8: Polish and finalization (T088-T095)
+
+### Implemented Features
+
+✅ **Voice Pipeline (End-to-End)**:
+- Speech-to-Text using OpenAI Whisper API
+- Intent classification (informational/task/conversational)
+- LLM response generation using Google Gemini
+- Text-to-Speech using ElevenLabs API with PCM audio
+
+✅ **Context Management**:
+- 5-exchange conversation memory (FIFO queue)
+- 5-minute inactivity timeout
+- Topic shift detection with Jaccard similarity
+- Optional encrypted persistence
+
+✅ **Action Execution**:
+- System status queries (CPU, memory, disk, battery, temperature)
+- Application launching (cross-platform: Spotify, Notepad, Browser)
+- Safe command execution with timeout protection
+
+✅ **Multi-Language Support**:
+- English, Arabic (Urdu), Hindi greetings recognized
 
 ## Contributing
 

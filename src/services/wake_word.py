@@ -40,10 +40,15 @@ class WakeWordDetector:
     def initialize(self) -> None:
         """Initialize pvporcupine wake word detector"""
         try:
+            # Check if access key is available
+            if not self.config.picovoice_access_key:
+                raise RuntimeError("Picovoice access key not found. Get one free at https://console.picovoice.ai/")
+
             # Create porcupine instance
             # Using built-in "porcupine" keyword for baseline
             # For custom "Hey Assistant", users need to train on Picovoice Console
             self.porcupine = pvporcupine.create(
+                access_key=self.config.picovoice_access_key,
                 keywords=["porcupine"],  # Built-in wake word
                 sensitivities=[self.config.wake_word.sensitivity]
             )

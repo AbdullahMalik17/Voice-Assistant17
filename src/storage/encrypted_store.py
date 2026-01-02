@@ -14,7 +14,7 @@ from uuid import UUID
 
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
 from ..models.conversation_context import ConversationContext
 
@@ -47,7 +47,7 @@ class EncryptedStore:
         salt = b'voice_assistant_salt_v1'  # 23 bytes
 
         # Derive key using PBKDF2
-        kdf = PBKDF2(
+        kdf = PBKDF2HMAC(
             algorithm=hashes.SHA256(),
             length=32,
             salt=salt,
