@@ -13,7 +13,7 @@ Build a privacy-centric voice assistant with wake word detection ("Hey Assistant
 **Primary Dependencies**:
 - FastAPI (backend service layer)
 - OpenAI Whisper (STT - local/API hybrid)
-- Gemini API / Ollama (LLM - cloud/local fallback)
+- Gemini API (google-genai) / Ollama (LLM - cloud/local fallback)
 - ElevenLabs API / Piper (TTS - cloud/local hybrid)
 - pvporcupine (wake word detection)
 - Playwright (system automation via MCP)
