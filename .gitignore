@@ -38,7 +38,9 @@ venv.bak/
 
 # Environment variables
 .env
+*.env.local
 config/.env
+web/.env*
 
 # Logs
 logs/
