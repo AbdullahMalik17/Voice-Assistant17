@@ -1,10 +1,12 @@
 """
 Speech-to-Text (STT) Service
-Converts spoken audio to text using Whisper (local) with OpenAI API fallback
+Converts spoken audio to text using Whisper (local) with OpenAI API fallback.
+Includes audio preprocessing for noise reduction and improved accuracy.
 """
 
 import io
 import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, Tuple
 
@@ -28,6 +30,24 @@ from ..core.config import Config
 from ..models.voice_command import VoiceCommand, VoiceCommandStatus
 from ..utils.audio_utils import AudioUtils
 from ..utils.logger import EventLogger, MetricsLogger
+from .audio_preprocessor import (
+    AudioPreprocessor,
+    AudioPreprocessorConfig,
+    NoiseReductionMethod,
+    ProcessedAudio
+)
+
+
+@dataclass
+class TranscriptionResult:
+    """Result of STT transcription with metadata"""
+    text: str
+    confidence: float
+    needs_clarification: bool = False
+    mode_used: str = "local"
+    preprocessing_applied: bool = False
+    preprocessing_stats: Optional[dict] = None
+    latency_ms: float = 0.0
 
 
 class STTService:
@@ -35,6 +55,12 @@ class STTService:
     Speech-to-Text service with hybrid architecture
     Primary: Whisper (local)
     Fallback: OpenAI Whisper API
+
+    Includes audio preprocessing for:
+    - Noise reduction (spectral gating)
+    - Voice activity detection
+    - Audio normalization
+    - Confidence-based clarification requests
     """
 
     def __init__(
@@ -50,6 +76,15 @@ class STTService:
         self.audio_utils = audio_utils
         self.mode = config.stt.primary_mode
 
+        # Confidence threshold for clarification requests
+        self.confidence_threshold = config.stt.confidence_threshold
+        self.clarification_prompt = config.stt.clarification_prompt
+
+        # Initialize audio preprocessor
+        self.preprocessor = None
+        if config.audio_preprocessor.enabled:
+            self._initialize_preprocessor()
+
         # Initialize local Whisper model
         self.whisper_model = None
         if WHISPER_LOCAL_AVAILABLE and self.mode in ["local", "hybrid"]:
@@ -59,6 +94,38 @@ class STTService:
         self.openai_client = None
         if OPENAI_API_AVAILABLE and config.openai_api_key and self.mode in ["api", "hybrid"]:
             self.openai_client = OpenAI(api_key=config.openai_api_key)
+
+    def _initialize_preprocessor(self) -> None:
+        """Initialize audio preprocessor for noise reduction"""
+        try:
+            preproc_config = self.config.audio_preprocessor
+            preprocessor_config = AudioPreprocessorConfig(
+                noise_reduction_enabled=preproc_config.noise_reduction_enabled,
+                noise_reduction_method=NoiseReductionMethod(preproc_config.noise_reduction_method),
+                noise_threshold_db=preproc_config.noise_threshold_db,
+                aec_enabled=preproc_config.aec_enabled,
+                aec_filter_length=preproc_config.aec_filter_length,
+                normalization_enabled=preproc_config.normalization_enabled,
+                target_level_db=preproc_config.target_level_db,
+                vad_enabled=preproc_config.vad_enabled,
+                vad_aggressiveness=preproc_config.vad_aggressiveness,
+                sample_rate=self.config.audio.sample_rate
+            )
+            self.preprocessor = AudioPreprocessor(preprocessor_config)
+
+            self.logger.info(
+                event='AUDIO_PREPROCESSOR_INITIALIZED',
+                message='Audio preprocessor initialized',
+                noise_reduction=preproc_config.noise_reduction_enabled,
+                method=preproc_config.noise_reduction_method
+            )
+        except Exception as e:
+            self.logger.warning(
+                event='AUDIO_PREPROCESSOR_INIT_FAILED',
+                message=f'Failed to initialize audio preprocessor: {str(e)}',
+                error=str(e)
+            )
+            self.preprocessor = None
 
     def _initialize_local_model(self) -> None:
         """Initialize local Whisper model"""
@@ -89,11 +156,40 @@ class STTService:
     def transcribe(
         self,
         audio_data: bytes,
-        duration_ms: int
+        duration_ms: int,
+        preprocess: bool = True,
+        reference_audio: Optional[bytes] = None
     ) -> Tuple[str, float]:
         """
-        Transcribe audio to text
+        Transcribe audio to text (legacy interface for backward compatibility)
         Returns: (transcribed_text, confidence_score)
+        """
+        result = self.transcribe_with_result(
+            audio_data=audio_data,
+            duration_ms=duration_ms,
+            preprocess=preprocess,
+            reference_audio=reference_audio
+        )
+        return result.text, result.confidence
+
+    def transcribe_with_result(
+        self,
+        audio_data: bytes,
+        duration_ms: int,
+        preprocess: bool = True,
+        reference_audio: Optional[bytes] = None
+    ) -> TranscriptionResult:
+        """
+        Transcribe audio to text with full result metadata.
+
+        Args:
+            audio_data: Raw 16-bit PCM audio bytes
+            duration_ms: Duration of audio in milliseconds
+            preprocess: Whether to apply noise reduction preprocessing
+            reference_audio: Optional TTS output for acoustic echo cancellation
+
+        Returns:
+            TranscriptionResult with text, confidence, and metadata
         """
         if not audio_data or len(audio_data) == 0:
             raise ValueError("Audio data must not be empty")
@@ -103,19 +199,45 @@ class STTService:
         confidence = 0.0
         success = False
         mode_used = self.mode
+        preprocessing_applied = False
+        preprocessing_stats = None
+
+        # Apply audio preprocessing if enabled
+        processed_audio = audio_data
+        if preprocess and self.preprocessor is not None:
+            try:
+                processed_result = self.preprocessor.process(
+                    audio_bytes=audio_data,
+                    reference_audio=reference_audio
+                )
+                processed_audio = processed_result.audio_bytes
+                preprocessing_applied = True
+                preprocessing_stats = processed_result.to_dict()
+
+                self.logger.debug(
+                    event='AUDIO_PREPROCESSING_COMPLETED',
+                    message='Audio preprocessing completed',
+                    **preprocessing_stats
+                )
+            except Exception as preproc_error:
+                self.logger.warning(
+                    event='AUDIO_PREPROCESSING_FAILED',
+                    message=f'Audio preprocessing failed, using raw audio: {str(preproc_error)}'
+                )
+                processed_audio = audio_data
 
         try:
             if self.mode == "api":
-                transcribed_text, confidence = self._transcribe_api(audio_data)
+                transcribed_text, confidence = self._transcribe_api(processed_audio)
                 mode_used = "api"
                 success = True
             elif self.mode == "local":
-                transcribed_text, confidence = self._transcribe_local(audio_data)
+                transcribed_text, confidence = self._transcribe_local(processed_audio)
                 mode_used = "local"
                 success = True
             else:  # hybrid mode
                 try:
-                    transcribed_text, confidence = self._transcribe_local(audio_data)
+                    transcribed_text, confidence = self._transcribe_local(processed_audio)
                     mode_used = "local"
                     success = True
                 except Exception as local_error:
@@ -123,7 +245,7 @@ class STTService:
                         event='STT_LOCAL_FALLBACK',
                         message=f'Local STT failed, falling back to API: {str(local_error)}'
                     )
-                    transcribed_text, confidence = self._transcribe_api(audio_data)
+                    transcribed_text, confidence = self._transcribe_api(processed_audio)
                     mode_used = "api"
                     success = True
 
@@ -142,20 +264,37 @@ class STTService:
             # Log event
             self.logger.info(
                 event='STT_TRANSCRIPTION_COMPLETED',
-                message=f'Transcription completed: "{transcribed_text[:50]}..."',
+                message=f'Transcription completed: "{transcribed_text[:50]}..."' if transcribed_text else 'Empty transcription',
                 text_length=len(transcribed_text),
                 processing_time_ms=duration_ms_actual,
                 audio_duration_ms=duration_ms,
                 mode=mode_used,
                 confidence=confidence,
-                success=success
+                success=success,
+                preprocessing_applied=preprocessing_applied
             )
 
             # Record metrics
             self.metrics_logger.record_metric('stt_latency_ms', duration_ms_actual)
             self.metrics_logger.record_metric('stt_confidence', confidence)
+            if preprocessing_stats:
+                self.metrics_logger.record_metric(
+                    'stt_snr_improvement_db',
+                    preprocessing_stats.get('snr_improvement_db', 0)
+                )
 
-        return transcribed_text, confidence
+        # Check if clarification is needed based on confidence
+        needs_clarification = confidence < self.confidence_threshold
+
+        return TranscriptionResult(
+            text=transcribed_text,
+            confidence=confidence,
+            needs_clarification=needs_clarification,
+            mode_used=mode_used,
+            preprocessing_applied=preprocessing_applied,
+            preprocessing_stats=preprocessing_stats,
+            latency_ms=duration_ms_actual
+        )
 
     def _transcribe_local(self, audio_data: bytes) -> Tuple[str, float]:
         """Transcribe using local Whisper model"""

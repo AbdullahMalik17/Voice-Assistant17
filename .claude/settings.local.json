@@ -11,7 +11,9 @@
       "mcp__context7__query-docs",
       "Bash(python -m pip install:*)",
       "Bash(python test_manual_validation.py:*)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(tree:*)",
+      "Bash(cat:*)"
     ]
   }
 }

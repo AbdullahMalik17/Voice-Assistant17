@@ -79,6 +79,28 @@ class WakeWordConfig(BaseModel):
     model_path: str = "models/wake_word/"
 
 
+class AudioPreprocessorConfig(BaseModel):
+    """Audio preprocessing configuration for noise reduction and AEC"""
+    enabled: bool = True
+    noise_reduction_enabled: bool = True
+    noise_reduction_method: str = Field(default="spectral_gating")
+    noise_threshold_db: float = Field(default=-40.0, ge=-80.0, le=0.0)
+    aec_enabled: bool = False
+    aec_filter_length: int = Field(default=1024, ge=256, le=4096)
+    normalization_enabled: bool = True
+    target_level_db: float = Field(default=-3.0, ge=-20.0, le=0.0)
+    vad_enabled: bool = True
+    vad_aggressiveness: int = Field(default=2, ge=0, le=3)
+
+    @field_validator('noise_reduction_method')
+    @classmethod
+    def validate_method(cls, v: str) -> str:
+        valid_methods = ['spectral_gating', 'wiener', 'simple_gate']
+        if v.lower() not in valid_methods:
+            raise ValueError(f'Noise reduction method must be one of: {valid_methods}')
+        return v.lower()
+
+
 class STTConfig(BaseModel):
     """Speech-to-Text configuration"""
     primary_mode: str = Field(default="hybrid")
@@ -86,6 +108,8 @@ class STTConfig(BaseModel):
     api_provider: str = "openai"
     language: str = "en"
     fallback_timeout_ms: int = Field(default=2000, ge=500, le=5000)
+    confidence_threshold: float = Field(default=0.6, ge=0.0, le=1.0)
+    clarification_prompt: str = "I didn't catch that clearly. Could you repeat?"
 
     @field_validator('primary_mode')
     @classmethod
@@ -195,6 +219,7 @@ class Config:
         # Initialize configuration objects
         self.assistant = AssistantConfig(**self._yaml_config.get('assistant', {}))
         self.audio = AudioConfig(**self._yaml_config.get('audio', {}))
+        self.audio_preprocessor = AudioPreprocessorConfig(**self._yaml_config.get('audio_preprocessor', {}))
         self.context = ContextConfig(**self._yaml_config.get('context', {}))
         self.network = NetworkConfig(**self._yaml_config.get('network', {}))
         self.actions = ActionsConfig(**self._yaml_config.get('actions', {}))
@@ -272,6 +297,7 @@ class Config:
         return {
             'assistant': self.assistant.model_dump(),
             'audio': self.audio.model_dump(),
+            'audio_preprocessor': self.audio_preprocessor.model_dump(),
             'context': self.context.model_dump(),
             'network': self.network.model_dump(),
             'actions': self.actions.model_dump(),

@@ -16,6 +16,13 @@ pyaudio>=0.2.14
 sounddevice>=0.4.6
 soundfile>=0.12.1
 numpy>=1.26.3
+scipy>=1.12.0  # Signal processing for audio
+
+# ===========================
+# Audio Preprocessing (Noise Reduction)
+# ===========================
+noisereduce>=3.0.0  # Spectral noise reduction
+webrtcvad>=2.0.10   # Voice activity detection
 
 # ===========================
 # Wake Word Detection
@@ -48,6 +55,12 @@ piper-tts==1.2.0
 playwright==1.41.0
 
 # ===========================
+# Semantic Memory (RAG)
+# ===========================
+chromadb>=0.4.0           # Vector database for embeddings
+sentence-transformers>=2.2.0  # Embedding generation
+
+# ===========================
 # Cryptography & Security
 # ===========================
 cryptography==42.0.2
@@ -65,6 +78,7 @@ python-json-logger==2.0.7
 psutil==5.9.7  # System status monitoring
 pyyaml==6.0.1  # YAML configuration
 requests==2.31.0  # HTTP requests
+python-dateutil>=2.8.2  # Date parsing for entity extraction
 
 # ===========================
 # Testing
