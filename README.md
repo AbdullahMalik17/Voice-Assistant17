@@ -1,16 +1,23 @@
 # Voice Assistant
 
-A privacy-first, cross-platform voice assistant with agentic AI capabilities including wake word detection, semantic memory, intelligent planning, and autonomous task execution.
+A privacy-first, cross-platform voice assistant with agentic AI capabilities including persistent memory, web interface, and intelligent planning with autonomous task execution.
 
 ## Features
 
 ### Core Capabilities
 - 🎙️ **Wake Word Activation**: Hands-free activation using "Hey Assistant"
 - 🗣️ **Intent Recognition**: Understand informational, task-based, and conversational queries
-- 🧠 **Semantic Memory**: RAG-based context retrieval across sessions using ChromaDB
+- 🧠 **Persistent Memory**: Cloud-based memory with Mem0 for cross-session context using semantic search
 - ⚡ **Agentic Planning**: Goal decomposition and multi-step task execution
 - 🔧 **Tool Integration**: Extensible tool registry for system and external actions
 - 🔒 **Privacy-First**: In-memory context by default, optional encrypted persistence
+
+### Web Interface Features
+- 🌐 **Real-time Chat**: WebSocket-based communication with live updates
+- 🎤 **Voice Input**: Push-to-talk recording with space bar activation
+- 🔊 **Voice Output**: Automatic TTS playback with manual speaker buttons
+- 📱 **Cross-Platform**: Next.js web interface accessible from any device
+- 🔄 **Auto-reconnection**: Robust WebSocket connection management
 
 ### Agentic AI Features (v2.0)
 - 🔊 **Audio Preprocessing**: Noise reduction, acoustic echo cancellation, VAD
@@ -25,6 +32,7 @@ A privacy-first, cross-platform voice assistant with agentic AI capabilities inc
 - ✅ macOS 11+
 - ✅ Linux Ubuntu 20.04+
 - ✅ Raspberry Pi 4/5 (Raspbian)
+- ✅ Web Browsers (Chrome, Firefox, Safari, Edge)
 
 ## Quick Start
 
@@ -46,17 +54,32 @@ pip install -r requirements.txt
 
 # Configure environment
 cp config/.env.template config/.env
-# Edit config/.env with your API keys
+# Edit config/.env with your API keys (including MEM0_API_KEY for persistent memory)
 ```
 
 ### Running
 
 ```bash
-# Run the assistant (full mode with wake word)
-python src/cli/assistant.py
+# Terminal 1: Start the backend API server
+cd F:\Voice_Assistant
+python -m uvicorn src.api.websocket_server:app --host 0.0.0.0 --port 8000
+
+# Terminal 2: Start the web interface (from project root)
+cd F:\Voice_Assistant\web
+npm install
+npm run dev
+# Web interface will be available at http://localhost:3000 (or 3001 if 3000 is busy)
 
 # Or run test mode without wake word (keyboard trigger)
 python test_assistant.py
+```
+
+### Web Interface Usage
+1. Open browser to `http://localhost:3000`
+2. Use text input for typing messages
+3. Hold SPACEBAR to record voice messages
+4. Click speaker icons to replay voice responses
+5. See conversation history with audio playback controls
 ```
 
 ### Example Commands
@@ -81,34 +104,45 @@ python test_assistant.py
 ## Architecture
 
 ```
-┌──────────────────────────────────────────────────────────────┐
-│                      VOICE ASSISTANT                          │
-│                    (Agentic AI System)                        │
-└──────────────────────────┬───────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        VOICE ASSISTANT                                    │
+│                   (Agentic AI System)                                     │
+└──────────────────────────┬─────────────────────────────────────────────────┘
                            │
-    ┌──────────────────────┼──────────────────────────────────┐
-    │                      │                                  │
-    ▼                      ▼                                  ▼
-┌────────────┐      ┌────────────────┐              ┌────────────────┐
-│ INPUT      │      │ PROCESSING     │              │ OUTPUT         │
-│            │      │                │              │                │
-│ Audio      │      │ Semantic       │              │ TTS Engine     │
-│ Preprocess │      │ Memory (RAG)   │              │ Action         │
-│ STT Engine │      │ NLU + Slots    │              │ Executor       │
-│ Wake Word  │      │ Agentic        │              │ Tool           │
-│            │      │ Planner        │              │ Integrations   │
-└────────────┘      └────────────────┘              └────────────────┘
+    ┌──────────────────────┼─────────────────────────────────────────────────┐
+    │                      │                                                 │
+    ▼                      ▼                                                 ▼
+┌────────────┐      ┌────────────────┐                              ┌────────────────┐
+│ WEB UI     │      │ BACKEND API    │                              │ INPUT/OUTPUT   │
+│            │      │                │                              │                │
+│ Next.js    │◄────►│ WebSocket      │◄────────────────────────────►│ Audio          │
+│ React      │      │ FastAPI        │                              │ Preprocess     │
+│ Chat UI    │      │ Memory         │                              │ STT/TTS        │
+└────────────┘      │ Services       │                              │ Wake Word      │
+                    └────────────────┘                              └────────────────┘
                            │
-    ┌──────────────────────┼──────────────────────────────────┐
-    │                      │                                  │
-    ▼                      ▼                                  ▼
-┌────────────┐      ┌────────────┐              ┌────────────────────┐
-│OBSERVABILITY│     │ STORAGE    │              │ EXTERNAL APIS      │
-│            │      │            │              │                    │
-│ Prometheus │      │ ChromaDB   │              │ Gemini/OpenAI LLM  │
-│ Tracing    │      │ SQLite     │              │ ElevenLabs TTS     │
-│ Health     │      │ Memory     │              │ Weather/Calendar   │
-└────────────┘      └────────────┘              └────────────────────┘
+    ┌──────────────────────┼─────────────────────────────────────────────────┐
+    │                      │                                                 │
+    ▼                      ▼                                                 ▼
+┌────────────┐      ┌────────────────┐                              ┌────────────────────┐
+│PERSISTENT  │      │ AGENTIC        │                              │ EXTERNAL APIS      │
+│MEMORY      │      │ AI             │                              │                    │
+│            │      │                │                              │ Gemini/OpenAI LLM  │
+│ Mem0 Cloud │      │ Semantic       │                              │ ElevenLabs TTS     │
+│ Semantic   │      │ Memory (RAG)   │                              │ ChromaDB           │
+│ Search     │      │ NLU + Slots    │                              │ Weather/Calendar   │
+└────────────┘      │ Agentic        │                              │ APIs               │
+                    │ Planner        │                              └────────────────────┘
+                    │ Tools          │
+                    └────────────────┘
+                           │
+                    ┌────────────┐
+                    │OBSERVABILITY│
+                    │            │
+                    │ Prometheus │
+                    │ Tracing    │
+                    │ Health     │
+                    └────────────┘
 ```
 
 ### Technology Stack
@@ -116,11 +150,14 @@ python test_assistant.py
 | Component | Technology |
 |-----------|------------|
 | Language | Python 3.10+ |
+| Web Framework | Next.js 14, React 18 |
+| Backend API | FastAPI, WebSockets |
 | Wake Word | pvporcupine (Picovoice) |
 | STT | OpenAI Whisper (local/API) |
 | Audio Preprocessing | noisereduce, webrtcvad, scipy |
 | LLM | Gemini API + Ollama (local) |
 | TTS | ElevenLabs + Piper (local) |
+| Persistent Memory | Mem0 Cloud (semantic search) |
 | Semantic Memory | ChromaDB + sentence-transformers |
 | Metrics | Prometheus |
 | Automation | Playwright MCP |
@@ -137,9 +174,18 @@ voice-assistant/
 │   ├── observability/  # Metrics, tracing, health (NEW)
 │   ├── models/         # Data models (Pydantic)
 │   ├── storage/        # Memory + encrypted persistence
-│   ├── api/            # FastAPI endpoints
+│   ├── api/            # FastAPI endpoints, WebSocket server
 │   ├── cli/            # CLI entry point
 │   └── utils/          # Audio, logging utilities
+├── web/                # Next.js web interface
+│   ├── src/
+│   │   ├── components/ # React components (chat, voice input)
+│   │   ├── hooks/      # Custom hooks (WebSocket, audio)
+│   │   ├── pages/      # Next.js pages
+│   │   └── types/      # TypeScript type definitions
+│   ├── public/         # Static assets
+│   ├── package.json    # Node.js dependencies
+│   └── next.config.js  # Next.js configuration
 ├── tests/
 │   ├── unit/           # Unit tests
 │   ├── integration/    # Integration tests
@@ -153,6 +199,19 @@ voice-assistant/
 ```
 
 ## New Modules (v2.0)
+
+### Persistent Memory (`src/services/persistent_memory.py`)
+- **Mem0 Cloud Integration**: Cloud-based persistent memory with semantic search
+- **Cross-Session Context**: User-specific memory across conversations
+- **Conversation Storage**: Full user/assistant conversation history
+- **Context Injection**: Automatic memory context in LLM prompts
+
+### Web Interface (`web/`)
+- **Next.js 14**: Modern React framework with App Router
+- **Real-time Chat**: WebSocket-based communication with live updates
+- **Voice Input**: Push-to-talk recording with space bar activation
+- **Audio Playback**: Automatic TTS with manual speaker controls
+- **Responsive Design**: Cross-platform web interface
 
 ### Semantic Memory (`src/memory/`)
 - **ChromaDB integration** for vector storage
@@ -178,6 +237,12 @@ voice-assistant/
 - NUMBER, MONEY, EMAIL, URL, PHONE
 - APP_NAME, FILE_PATH
 
+### WebSocket Server (`src/api/websocket_server.py`)
+- **Real-time Communication**: WebSocket-based bidirectional messaging
+- **Audio Streaming**: Direct audio transmission for voice features
+- **Session Management**: Persistent connection handling
+- **Memory Integration**: Persistent memory context for conversations
+
 ### Observability (`src/observability/`)
 - **Prometheus metrics**: Latency histograms, counters, gauges
 - **Distributed tracing**: Request tracking with spans
@@ -192,6 +257,7 @@ voice-assistant/
 OPENAI_API_KEY=your-key
 GEMINI_API_KEY=your-key
 ELEVENLABS_API_KEY=your-key
+MEM0_API_KEY=your-mem0-key  # For persistent memory
 PICOVOICE_ACCESS_KEY=your-key
 
 # Service Modes (local, api, hybrid)
@@ -261,10 +327,13 @@ GitHub Actions workflow includes:
 - [Agentic AI Specification](specs/002-agentic-ai-improvements/spec.md) (NEW)
 - [Implementation Plan](specs/002-agentic-ai-improvements/plan.md) (NEW)
 - [Task Breakdown](specs/002-agentic-ai-improvements/tasks.md) (NEW)
+- [Persistent Memory](docs/persistent-memory.md)
+- [API Endpoints](docs/api-endpoints.md)
+- [Web Interface](docs/web-interface.md)
 
 ## Development Status
 
-**Current Version**: 2.0.0 (Agentic AI)
+**Current Version**: 2.1.0 (Persistent Memory + Web Interface)
 
 ### Completed Features
 - [x] Voice pipeline (STT → Intent → LLM → TTS)
@@ -272,11 +341,16 @@ GitHub Actions workflow includes:
 - [x] System status queries and app launching
 - [x] Audio preprocessing with noise reduction
 - [x] Semantic memory (RAG) with ChromaDB
+- [x] Persistent memory with Mem0 cloud storage
 - [x] Entity extraction and slot filling
 - [x] Agentic planner with tool registry
 - [x] Safety guardrails
 - [x] Observability infrastructure
 - [x] CI/CD pipeline
+- [x] Web interface with Next.js
+- [x] Real-time WebSocket communication
+- [x] Voice input/output in web browser
+- [x] Audio playback with auto-play controls
 
 ### Roadmap
 - [ ] Integration tests with real audio files

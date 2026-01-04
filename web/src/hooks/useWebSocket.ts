@@ -25,8 +25,21 @@ export function useWebSocket({
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectCountRef = useRef(0);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout>();
+  const shouldConnectRef = useRef(true);
+
+  // Store callbacks in refs to always use latest versions
+  const onMessageRef = useRef(onMessage);
+  const onConnectRef = useRef(onConnect);
+  const onDisconnectRef = useRef(onDisconnect);
+
+  useEffect(() => {
+    onMessageRef.current = onMessage;
+    onConnectRef.current = onConnect;
+    onDisconnectRef.current = onDisconnect;
+  }, [onMessage, onConnect, onDisconnect]);
 
   const connect = useCallback(() => {
+    if (!shouldConnectRef.current) return;
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
 
     // Clear any pending reconnect
@@ -42,7 +55,7 @@ export function useWebSocket({
       ws.onopen = () => {
         setStatus('connected');
         reconnectCountRef.current = 0;
-        onConnect?.();
+        onConnectRef.current?.();
       };
 
       ws.onmessage = (event) => {
@@ -51,7 +64,7 @@ export function useWebSocket({
           if (message.type === 'system' && message.content?.session_id) {
             setSessionId(message.content.session_id);
           }
-          onMessage?.(message);
+          onMessageRef.current?.(message);
         } catch (e) {
           console.error('Failed to parse message:', e);
         }
@@ -60,7 +73,7 @@ export function useWebSocket({
       ws.onclose = () => {
         setStatus('disconnected');
         wsRef.current = null;
-        onDisconnect?.();
+        onDisconnectRef.current?.();
 
         // Attempt reconnection
         if (reconnectCountRef.current < reconnectAttempts) {
@@ -79,9 +92,10 @@ export function useWebSocket({
       console.error('Failed to create WebSocket:', error);
       setStatus('error');
     }
-  }, [url, onMessage, onConnect, onDisconnect, reconnectAttempts, reconnectInterval]);
+  }, [url, reconnectAttempts, reconnectInterval]);
 
   const disconnect = useCallback(() => {
+    shouldConnectRef.current = false;
     if (reconnectTimeoutRef.current) {
       clearTimeout(reconnectTimeoutRef.current);
     }
@@ -107,11 +121,19 @@ export function useWebSocket({
   }, [sendMessage]);
 
   useEffect(() => {
+    shouldConnectRef.current = true;
     connect();
+
     return () => {
-      disconnect();
+      shouldConnectRef.current = false;
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+      }
+      wsRef.current?.close();
+      wsRef.current = null;
     };
-  }, [connect, disconnect]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [url]); // Only reconnect if URL changes
 
   return {
     status,

@@ -40,11 +40,29 @@ class IntentClassifier:
                 r'\b(check|show|what\'?s?)\s+(my|the)?\s*(cpu|memory|disk|battery|temperature|status)',
                 r'\b(how\s+much|how\s+many)\s+(memory|ram|disk\s+space)',
             ],
+            ActionType.EMAIL_ACCESS: [
+                r'\b(open|check|show|read)\s+(my\s+)?(email|gmail|inbox|mail)',
+                r'\b(check|show|list)\s+(my\s+)?messages',
+                r'\b(send|write|compose)\s+(an?\s+)?email',
+                r'\b(search|find)\s+(in\s+)?(my\s+)?(email|gmail)',
+            ],
+            ActionType.DRIVE_ACCESS: [
+                r'\b(open|show|access)\s+(my\s+)?(google\s+)?drive',
+                r'\b(list|show)\s+(my\s+)?files',
+                r'\b(find|search)\s+(file|document|folder)',
+                r'\b(download|upload)\s+(file|document)',
+            ],
             ActionType.BROWSER_AUTOMATION: [
-                r'\b(navigate|go)\s+to\s+(the\s+)?\s*(\w+)',
-                r'\b(search|look\s+up|find)\s+(for|on)?\s+(\w+)',
-                r'\b(click|press|tap)\s+(on\s+)?(.+)',
-                r'\b(fill|enter|type)\s+(.+)',
+                r'\b(navigate|go|browse)\s+to\s+(.+)',
+                r'\b(search|google|look\s+up)\s+(for\s+)?(.+)',
+                r'\b(open|visit)\s+(website|page|url)',
+                r'\b(take|capture)\s+(a\s+)?(screenshot|screen\s+shot)',
+            ],
+            ActionType.SYSTEM_CONTROL: [
+                r'\b(find|locate|search\s+for)\s+(file|folder)',
+                r'\b(take|capture)\s+(a\s+)?(screenshot|screen\s+capture)',
+                r'\b(minimize|maximize|close)\s+(window|all)',
+                r'\b(switch|change)\s+to\s+(.+)',
             ],
             ActionType.FILE_OPERATION: [
                 r'\b(create|make|new)\s+(file|folder|directory)',

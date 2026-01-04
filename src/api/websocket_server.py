@@ -23,11 +23,11 @@ logger = logging.getLogger(__name__)
 
 # Import Voice Assistant services
 try:
-    from services.stt import STTService
-    from services.llm import LLMService
-    from services.tts import TTSService
-    from services.intent import IntentClassifier
-    from core.config import load_config
+    from src.services.stt import STTService
+    from src.services.llm import LLMService
+    from src.services.tts import TTSService
+    from src.services.intent_classifier import IntentClassifier
+    from src.core.config import get_config
     SERVICES_AVAILABLE = True
 except ImportError as e:
     logger.warning(f"Some services not available: {e}")
@@ -35,17 +35,19 @@ except ImportError as e:
 
 # Optional imports for enhanced features
 try:
-    from memory.semantic_memory import SemanticMemory
-    from memory.dialogue_state import DialogueStateManager
+    from src.memory.semantic_memory import SemanticMemory
+    from src.memory.dialogue_state import DialogueStateManager
     MEMORY_AVAILABLE = True
-except ImportError:
+except ImportError as e:
+    logger.warning(f"Memory services not available: {e}")
     MEMORY_AVAILABLE = False
 
 try:
-    from agents.planner import AgenticPlanner
-    from agents.guardrails import SafetyGuardrails
+    from src.agents.planner import AgenticPlanner
+    from src.agents.guardrails import SafetyGuardrails
     AGENTS_AVAILABLE = True
-except ImportError:
+except ImportError as e:
+    logger.warning(f"Agent services not available: {e}")
     AGENTS_AVAILABLE = False
 
 
@@ -144,6 +146,35 @@ class SessionManager:
         return len(self.connections)
 
 
+class SimpleEventLogger:
+    """Simple event logger wrapper for services."""
+    def __init__(self, logger):
+        self._logger = logger
+
+    def info(self, event=None, message=None, **kwargs):
+        self._logger.info(f"{event}: {message}" if event else str(message))
+
+    def warning(self, event=None, message=None, **kwargs):
+        self._logger.warning(f"{event}: {message}" if event else str(message))
+
+    def error(self, event=None, message=None, **kwargs):
+        self._logger.error(f"{event}: {message}" if event else str(message))
+
+    def tts_completed(self, **kwargs):
+        """Log TTS completion event."""
+        self._logger.info(f"TTS_COMPLETED: {kwargs}")
+
+    def stt_completed(self, **kwargs):
+        """Log STT completion event."""
+        self._logger.info(f"STT_COMPLETED: {kwargs}")
+
+
+class SimpleMetricsLogger:
+    """Simple metrics logger wrapper."""
+    def record_metric(self, name, value):
+        pass  # No-op for now
+
+
 class VoiceAssistantHandler:
     """Handles Voice Assistant processing for WebSocket requests."""
 
@@ -160,22 +191,66 @@ class VoiceAssistantHandler:
 
         # Initialize available services
         if SERVICES_AVAILABLE:
-            try:
-                self.stt = STTService(config)
-                self.llm = LLMService(config)
-                self.tts = TTSService(config)
-                self.intent = IntentClassifier(config)
-                logger.info("Core services initialized")
-            except Exception as e:
-                logger.error(f"Failed to initialize core services: {e}")
+            # Create loggers for services
+            base_logger = logging.getLogger("services")
+            service_logger = SimpleEventLogger(base_logger)
+            metrics_logger = SimpleMetricsLogger()
 
+            # Initialize LLM service (required for text chat)
+            try:
+                self.llm = LLMService(config, service_logger, metrics_logger)
+                logger.info("LLM service initialized")
+            except Exception as e:
+                logger.error(f"Failed to initialize LLM service: {e}")
+
+            # Initialize other services (optional for text-only mode)
+            try:
+                self.intent = IntentClassifier(config, service_logger, metrics_logger)
+                logger.info("Intent classifier initialized")
+            except Exception as e:
+                logger.warning(f"Intent classifier not available: {e}")
+
+            # Initialize audio utils for TTS and STT
+            try:
+                from src.utils.audio_utils import AudioUtils
+                self.audio_utils = AudioUtils()
+            except Exception as e:
+                logger.warning(f"Audio utils not available: {e}")
+                self.audio_utils = None
+
+            # Initialize TTS for voice output
+            try:
+                if self.audio_utils:
+                    self.tts = TTSService(config, service_logger, metrics_logger, self.audio_utils)
+                    logger.info("TTS service initialized")
+            except Exception as e:
+                logger.warning(f"TTS service not available: {e}")
+
+            # STT for voice input (web interface uses browser's MediaRecorder)
+            try:
+                if self.audio_utils:
+                    self.stt = STTService(config, service_logger, metrics_logger, self.audio_utils)
+                    logger.info("STT service initialized")
+            except Exception as e:
+                logger.warning(f"STT service not available: {e}")
+
+        # Initialize persistent memory (mem0)
+        try:
+            from src.services.persistent_memory import PersistentMemoryService
+            self.persistent_memory = PersistentMemoryService()
+            logger.info("Persistent memory service initialized")
+        except Exception as e:
+            logger.warning(f"Persistent memory not available: {e}")
+            self.persistent_memory = None
+
+        # Initialize semantic memory (optional, legacy)
         if MEMORY_AVAILABLE:
             try:
                 self.memory = SemanticMemory(config)
                 self.dialogue = DialogueStateManager(self.memory)
-                logger.info("Memory services initialized")
+                logger.info("Semantic memory services initialized")
             except Exception as e:
-                logger.warning(f"Memory services not available: {e}")
+                logger.warning(f"Semantic memory services not available: {e}")
 
         if AGENTS_AVAILABLE and self.llm:
             try:
@@ -185,50 +260,89 @@ class VoiceAssistantHandler:
             except Exception as e:
                 logger.warning(f"Agent services not available: {e}")
 
-    async def process_text(self, text: str, session_id: str, context: List[dict] = None) -> dict:
+    async def process_text(self, text: str, user_id: str, context: List[dict] = None) -> dict:
         """Process text input and return response."""
         try:
-            # Classify intent if available
+            # Skip intent classification for web interface (requires voice_command_id)
             intent_result = None
-            if self.intent:
-                intent_result = await asyncio.to_thread(
-                    self.intent.classify, text
+
+            # Retrieve relevant memories from persistent memory (mem0)
+            persistent_context = ""
+            if self.persistent_memory:
+                persistent_context = self.persistent_memory.get_memory_context(
+                    query=text,
+                    user_id=user_id,
+                    limit=5
                 )
 
-            # Get context from memory if available
+            # Get context from semantic memory if available (legacy)
             memory_context = None
             if self.dialogue:
                 memory_context = self.dialogue.retrieve_context(session_id, text)
 
-            # Build context string
+            # Build context string with memories
             context_str = ""
+            if persistent_context:
+                context_str = persistent_context + "\n\n"
             if context:
-                context_str = "\n".join([
+                context_str += "\n".join([
                     f"{msg['role']}: {msg['content']}"
                     for msg in context[-5:]
                 ])
             if memory_context:
                 context_str += "\n" + str(memory_context)
 
-            # Generate response
+            # Generate response with memory context
             if self.llm:
+                # If we have persistent context, include it in the query
+                query_with_context = text
+                if persistent_context:
+                    query_with_context = f"{persistent_context}\n\nUser query: {text}"
+
                 response = await asyncio.to_thread(
-                    self.llm.generate,
-                    text,
-                    context=context_str if context_str else None
+                    self.llm.generate_response,
+                    query=query_with_context,
+                    intent=intent_result,
+                    context=None  # Context handling simplified for web interface
                 )
             else:
                 response = f"Echo: {text} (LLM service not available)"
 
-            # Update dialogue state if available
+            # Store conversation in persistent memory
+            if self.persistent_memory:
+                self.persistent_memory.add_conversation(
+                    user_message=text,
+                    assistant_message=response,
+                    user_id=user_id,
+                    metadata={
+                        "intent": intent_result.intent_type if intent_result else "unknown",
+                        "confidence": intent_result.confidence if intent_result else 0.0
+                    }
+                )
+
+            # Update dialogue state if available (legacy)
             if self.dialogue:
                 self.dialogue.update_session(session_id, text, response)
 
-            return {
+            result = {
                 "text": response,
                 "intent": intent_result.intent_type if intent_result else "unknown",
                 "confidence": intent_result.confidence if intent_result else 0.0
             }
+
+            # Generate TTS audio for text responses (web interface voice output)
+            if self.tts:
+                try:
+                    audio_response = await asyncio.to_thread(
+                        self.tts.synthesize, response
+                    )
+                    if audio_response:
+                        result["audio"] = base64.b64encode(audio_response).decode()
+                        logger.info("TTS audio generated for text response")
+                except Exception as e:
+                    logger.warning(f"TTS generation failed: {e}")
+
+            return result
 
         except Exception as e:
             logger.error(f"Error processing text: {e}")
@@ -245,9 +359,15 @@ class VoiceAssistantHandler:
             if not self.stt:
                 return {"error": "STT service not available", "text": ""}
 
+            # Calculate audio duration in milliseconds
+            duration_ms = 0
+            if self.audio_utils:
+                duration_seconds = self.audio_utils.get_duration(audio_bytes)
+                duration_ms = int(duration_seconds * 1000)
+
             # Transcribe audio
             transcription = await asyncio.to_thread(
-                self.stt.transcribe_with_result, audio_bytes
+                self.stt.transcribe_with_result, audio_bytes, duration_ms
             )
 
             if not transcription.text:
@@ -257,13 +377,13 @@ class VoiceAssistantHandler:
                     "transcription": ""
                 }
 
-            # Process as text
+            # Process as text - for WebSocket, use session_id as user_id
             response = await self.process_text(transcription.text, session_id, context)
             response["transcription"] = transcription.text
             response["stt_confidence"] = transcription.confidence
 
-            # Generate TTS if available and enabled
-            if self.tts and hasattr(self.config, 'tts') and self.config.tts.enabled:
+            # Generate TTS if available (always enabled for web interface)
+            if self.tts:
                 try:
                     audio_response = await asyncio.to_thread(
                         self.tts.synthesize, response["text"]
@@ -299,7 +419,7 @@ async def lifespan(app: FastAPI):
     # Load configuration
     try:
         if SERVICES_AVAILABLE:
-            config = load_config()
+            config = get_config()
         else:
             config = None
         handler = VoiceAssistantHandler(config)
@@ -323,7 +443,7 @@ app = FastAPI(
 )
 
 # Configure CORS
-cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:8000").split(",")
+cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:8000,http://127.0.0.1:3000,http://127.0.0.1:8000").split(",")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
@@ -482,11 +602,12 @@ async def chat_endpoint(request: dict):
     """REST endpoint for text chat (non-WebSocket alternative)."""
     text = request.get("text", "")
     session_id = request.get("session_id", str(uuid.uuid4()))
+    user_id = request.get("user_id", session_id)  # Use provided user_id or fall back to session_id
 
     if not text:
         raise HTTPException(status_code=400, detail="Text is required")
 
-    response = await handler.process_text(text, session_id)
+    response = await handler.process_text(text, user_id)  # Use user_id instead of session_id for memory
     return JSONResponse(content=response)
 
 

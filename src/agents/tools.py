@@ -574,4 +574,27 @@ def create_default_registry() -> ToolRegistry:
     registry.register(WebSearchTool())
     registry.register(GetWeatherTool())
 
+    # Register browser automation tools
+    try:
+        from .browser_tools import (
+            BrowserNavigateTool,
+            BrowserSearchTool,
+            OpenGmailTool,
+            OpenGoogleDriveTool,
+            BrowserScreenshotTool,
+            BrowserClickTool,
+            BrowserTypeTool
+        )
+
+        registry.register(BrowserNavigateTool())
+        registry.register(BrowserSearchTool())
+        registry.register(OpenGmailTool())
+        registry.register(OpenGoogleDriveTool())
+        registry.register(BrowserScreenshotTool())
+        registry.register(BrowserClickTool())
+        registry.register(BrowserTypeTool())
+    except ImportError as e:
+        # Browser tools optional if Playwright not installed
+        pass
+
     return registry

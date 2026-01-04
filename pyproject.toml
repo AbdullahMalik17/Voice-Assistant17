@@ -1,0 +1,93 @@
+[project]
+name = "voice-assistant"
+version = "2.0.0"
+description = "Privacy-first, cross-platform voice assistant with agentic AI capabilities"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    # Core Framework
+    "fastapi>=0.109.0",
+    "uvicorn[standard]>=0.27.0",
+    "pydantic>=2.5.3",
+    "pydantic-settings>=2.1.0",
+
+    # Audio Processing
+    "pyaudio>=0.2.14",
+    "sounddevice>=0.4.6",
+    "soundfile>=0.12.1",
+    "numpy>=1.26.3",
+    "scipy>=1.12.0",
+
+    # Audio Preprocessing
+    "noisereduce>=3.0.0",
+    "webrtcvad>=2.0.10",
+
+    # Wake Word Detection
+    "pvporcupine>=3.0.2",
+
+    # Speech-to-Text
+    "openai-whisper>=20231117",
+    "torch>=2.1.0",
+    "torchaudio>=2.1.0",
+
+    # LLM Integration
+    "google-generativeai>=0.3.0",
+    "openai>=1.6.0",
+
+    # Text-to-Speech
+    "elevenlabs>=0.2.26",
+    "TTS>=0.22.0",
+
+    # Memory & Embeddings
+    "chromadb>=0.4.22",
+    "sentence-transformers>=2.2.2",
+
+    # Utilities
+    "python-dotenv>=1.0.0",
+    "pyyaml>=6.0",
+    "aiofiles>=23.2.1",
+    "httpx>=0.25.2",
+    "cryptography>=41.0.7",
+
+    # Observability
+    "prometheus-client>=0.19.0",
+    "opentelemetry-api>=1.22.0",
+    "opentelemetry-sdk>=1.22.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.3",
+    "pytest-asyncio>=0.23.2",
+    "pytest-cov>=4.1.0",
+    "pytest-mock>=3.12.0",
+    "ruff>=0.1.9",
+    "mypy>=1.8.0",
+    "bandit>=1.7.6",
+]
+
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_backend"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "B", "C90"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --cov=src --cov-report=term-missing"
+asyncio_mode = "auto"

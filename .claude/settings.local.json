@@ -13,7 +13,22 @@
       "Bash(python test_manual_validation.py:*)",
       "Bash(python:*)",
       "Bash(tree:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Skill(skill-creator)",
+      "Bash(dir:*)",
+      "Bash(findstr:*)",
+      "Bash(curl:*)",
+      "Bash(uv:*)",
+      "mcp__playwright__browser_snapshot",
+      "Bash(powershell -Command \"Start-Sleep -Seconds 3\")",
+      "Bash(powershell -Command \"Start-Sleep -Seconds 5\")",
+      "Bash(powershell -Command \"Start-Sleep -Seconds 7\")",
+      "Bash(tasklist)",
+      "Bash(taskkill /PID 29796 /PID 31872 /F)",
+      "Bash(powershell -Command \"Start-Sleep -Seconds 10\")",
+      "Bash(cross-env NODE_OPTIONS=\"--max-old-space-size=4096\" npm run dev)",
+      "Bash(powershell -Command \"Start-Sleep -Seconds 15\")",
+      "Bash(timeout /t 5 /nobreak)"
     ]
   }
 }

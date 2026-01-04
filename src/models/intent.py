@@ -22,7 +22,10 @@ class ActionType(str, Enum):
     """Specific action types for task-based intents"""
     LAUNCH_APP = "LAUNCH_APP"  # Open application
     SYSTEM_STATUS = "SYSTEM_STATUS"  # Check CPU/memory/disk
-    BROWSER_AUTOMATION = "BROWSER_AUTOMATION"  # Playwright MCP automation
+    BROWSER_AUTOMATION = "BROWSER_AUTOMATION"  # Playwright browser automation
+    EMAIL_ACCESS = "EMAIL_ACCESS"  # Gmail/email operations
+    DRIVE_ACCESS = "DRIVE_ACCESS"  # Google Drive/file cloud operations
+    SYSTEM_CONTROL = "SYSTEM_CONTROL"  # Laptop/system control
     FILE_OPERATION = "FILE_OPERATION"  # File management
     CUSTOM_SCRIPT = "CUSTOM_SCRIPT"  # User-defined script
 

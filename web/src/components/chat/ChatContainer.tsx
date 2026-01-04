@@ -10,6 +10,7 @@ import { Wifi, WifiOff, Loader2, Settings } from 'lucide-react';
 import { generateId } from '@/lib/utils';
 
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000/ws/voice';
+console.log('WS_URL:', WS_URL);
 
 export function ChatContainer() {
   const [messages, setMessages] = useState<Message[]>([]);

@@ -121,12 +121,12 @@ class TTSService:
         try:
             # Generate audio using ElevenLabs v2 API
             # Using text_to_speech.convert() method
-            # Use PCM format for direct playback compatibility
+            # Use MP3 format for web browser compatibility
             audio_generator = self.elevenlabs_client.text_to_speech.convert(
                 voice_id="JBFqnCBsd6RMkjVDRZzb",  # Rachel voice (default)
                 text=text,
                 model_id="eleven_multilingual_v2",
-                output_format="pcm_16000"  # PCM format at 16kHz (matches our audio config)
+                output_format="mp3_44100_128"  # MP3 format for web playback
             )
 
             # Collect audio bytes from generator
