@@ -100,6 +100,14 @@ performance:
   end_to_end_ms: 30000
     # Target: <3s (wake to response)
 
+# Browser automation settings
+browser:
+  enabled: true  # Enable browser automation features
+  browser_type: "chromium"  # chromium, firefox, or webkit
+  headless: false  # Run browser without UI (true for servers)
+  default_timeout_ms: 30000  # Default navigation timeout
+  screenshot_on_error: true  # Capture screenshots on failures
+
 # Platform-specific settings
 platform:
   auto_detect: true  # Auto-detect OS and adjust settings

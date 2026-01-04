@@ -184,8 +184,36 @@ class IntentClassifier:
                 if group in ['cpu', 'memory', 'ram', 'disk', 'battery', 'temperature']:
                     entities['status_type'] = group
 
+        elif action_type == ActionType.EMAIL_ACCESS:
+            # Extract email-related entities
+            groups = [g for g in match.groups() if g]
+            if 'send' in match.string.lower() or 'compose' in match.string.lower():
+                entities['action'] = 'compose'
+            elif 'search' in match.string.lower() or 'find' in match.string.lower():
+                entities['action'] = 'search'
+            else:
+                entities['action'] = 'list'
+
+        elif action_type == ActionType.DRIVE_ACCESS:
+            # Extract Drive-related entities
+            groups = [g for g in match.groups() if g]
+            if 'download' in match.string.lower():
+                entities['action'] = 'download'
+            elif 'upload' in match.string.lower():
+                entities['action'] = 'upload'
+            elif 'search' in match.string.lower() or 'find' in match.string.lower():
+                entities['action'] = 'search'
+            else:
+                entities['action'] = 'list'
+
         elif action_type == ActionType.BROWSER_AUTOMATION:
             # Extract target or action details
+            groups = [g for g in match.groups() if g]
+            if groups:
+                entities['target'] = groups[-1]
+
+        elif action_type == ActionType.SYSTEM_CONTROL:
+            # Extract system control details
             groups = [g for g in match.groups() if g]
             if groups:
                 entities['target'] = groups[-1]
@@ -213,8 +241,12 @@ class IntentClassifier:
         """Determine if intent requires network connectivity"""
         # Task-based intents usually don't require network (local actions)
         if intent_type == IntentType.TASK_BASED:
-            # Browser automation might need network
-            if action_type == ActionType.BROWSER_AUTOMATION:
+            # These actions require network
+            if action_type in [
+                ActionType.BROWSER_AUTOMATION,
+                ActionType.EMAIL_ACCESS,
+                ActionType.DRIVE_ACCESS
+            ]:
                 return True
             return False
 
