@@ -246,7 +246,9 @@ class VoiceAssistantHandler:
         # Initialize semantic memory (optional, legacy)
         if MEMORY_AVAILABLE:
             try:
-                self.memory = SemanticMemory(config)
+                from src.memory.semantic_memory import MemoryConfig
+                memory_config = MemoryConfig()
+                self.memory = SemanticMemory(memory_config)
                 self.dialogue = DialogueStateManager(self.memory)
                 logger.info("Semantic memory services initialized")
             except Exception as e:
@@ -254,15 +256,125 @@ class VoiceAssistantHandler:
 
         if AGENTS_AVAILABLE and self.llm:
             try:
-                self.planner = AgenticPlanner(self.llm)
-                self.guardrails = SafetyGuardrails(config)
+                # Create tool registry with all available tools
+                from ..agents.tools import create_default_registry
+                tool_registry = create_default_registry()
+
+                # Create guardrails
+                self.guardrails = SafetyGuardrails()
+
+                # Initialize planner with tool registry and LLM service
+                self.planner = AgenticPlanner(
+                    tool_registry=tool_registry,
+                    guardrails=self.guardrails,
+                    llm_service=self.llm
+                )
                 logger.info("Agent services initialized")
             except Exception as e:
                 logger.warning(f"Agent services not available: {e}")
+                logger.error(f"Error details: {e}")
 
     async def process_text(self, text: str, user_id: str, context: List[dict] = None) -> dict:
         """Process text input and return response."""
         try:
+            # Check if this is a complex request that could benefit from tools
+            should_use_agent = False
+            if self.planner:
+                # Determine if the request might require tools (contains action words, complex requests, etc.)
+                text_lower = text.lower()
+                tool_indicators = [
+                    "open", "launch", "start", "find", "search", "timer", "weather",
+                    "gmail", "drive", "email", "screenshot", "status", "system",
+                    "file", "folder", "list", "show", "check", "get", "take"
+                ]
+                should_use_agent = any(indicator in text_lower for indicator in tool_indicators)
+
+            # If agent is available and the request might benefit from tools, try using it first
+            if self.planner and should_use_agent:
+                try:
+                    # Create a plan for the request
+                    # Build context string for the planner
+                    context_str = ""
+                    persistent_context = ""
+                    if self.persistent_memory:
+                        persistent_context = self.persistent_memory.get_memory_context(
+                            query=text,
+                            user_id=user_id,
+                            limit=5
+                        )
+
+                    if persistent_context:
+                        context_str = persistent_context + "\n\n"
+                    # Get context from semantic memory if available (legacy)
+                    memory_context = None
+                    if self.dialogue:
+                        memory_context = self.dialogue.retrieve_context(user_id, text)
+
+                    if context:
+                        context_str += "\n".join([
+                            f"{msg['role']}: {msg['content']}"
+                            for msg in context[-5:]
+                        ])
+                    if memory_context:
+                        context_str += "\n" + str(memory_context)
+
+                    plan = self.planner.create_plan(text, context_str if context_str else None)
+                    is_valid, errors = self.planner.validate_plan(plan)
+
+                    if is_valid and plan.steps:
+                        # Execute the plan
+                        success, results = self.planner.execute_simple(plan)
+
+                        # Check if any steps were successfully executed
+                        executed_steps = [r for r in results if r['type'] == 'step_completed']
+                        if executed_steps:
+                            # Get the last step result
+                            last_result = executed_steps[-1]
+                            tool_result = last_result['data'].get('result', {})
+
+                            if tool_result.get('success'):
+                                # Format the tool result as the response
+                                tool_data = tool_result.get('data', {})
+                                response_text = self._format_tool_response(tool_data, text)
+
+                                result = {
+                                    "text": response_text,
+                                    "intent": "tool_execution",
+                                    "confidence": 1.0,
+                                    "tool_results": tool_data,
+                                    "tool_execution": True
+                                }
+
+                                # Store tool execution in persistent memory
+                                if self.persistent_memory:
+                                    self.persistent_memory.add_conversation(
+                                        user_message=text,
+                                        assistant_message=response_text,
+                                        user_id=user_id,
+                                        metadata={
+                                            "intent": "tool_execution",
+                                            "confidence": 1.0,
+                                            "tool_data": tool_data
+                                        }
+                                    )
+
+                                # Generate TTS audio for tool response
+                                if self.tts:
+                                    try:
+                                        audio_response = await asyncio.to_thread(
+                                            self.tts.synthesize, response_text
+                                        )
+                                        if audio_response:
+                                            result["audio"] = base64.b64encode(audio_response).decode()
+                                            logger.info("TTS audio generated for tool response")
+                                    except Exception as e:
+                                        logger.warning(f"TTS generation failed: {e}")
+
+                                return result
+                except Exception as e:
+                    logger.warning(f"Agent tool execution failed: {e}")
+                    # Fall back to regular processing if agent fails
+
             # Skip intent classification for web interface (requires voice_command_id)
             intent_result = None
 
@@ -278,7 +390,7 @@ class VoiceAssistantHandler:
             # Get context from semantic memory if available (legacy)
             memory_context = None
             if self.dialogue:
-                memory_context = self.dialogue.retrieve_context(session_id, text)
+                memory_context = self.dialogue.retrieve_context(user_id, text)
 
             # Build context string with memories
             context_str = ""
@@ -322,7 +434,7 @@ class VoiceAssistantHandler:
 
             # Update dialogue state if available (legacy)
             if self.dialogue:
-                self.dialogue.update_session(session_id, text, response)
+                self.dialogue.update_session(user_id, text, response)
 
             result = {
                 "text": response,
@@ -402,6 +514,49 @@ class VoiceAssistantHandler:
                 "text": "I apologize, but I couldn't process your audio.",
                 "transcription": ""
             }
+
+    def _format_tool_response(self, tool_data: dict, original_request: str) -> str:
+        """Format tool execution results into a natural language response."""
+        if not tool_data:
+            return "I processed your request but didn't get specific results."
+
+        # Handle different types of tool results
+        if "message" in tool_data:
+            return tool_data["message"]
+
+        if "emails" in tool_data:
+            # Gmail tool response
+            count = tool_data.get("total_count", len(tool_data.get("emails", [])))
+            return f"I found {count} emails for you."
+
+        if "files" in tool_data:
+            # Drive tool response
+            count = tool_data.get("count", len(tool_data.get("files", [])))
+            return f"I found {count} files in your Drive."
+
+        if "processes" in tool_data:
+            # System processes tool
+            count = tool_data.get("count", len(tool_data.get("processes", [])))
+            return f"I found {count} running processes."
+
+        if "results" in tool_data:
+            # File search results
+            count = tool_data.get("count", len(tool_data.get("results", [])))
+            return f"I found {count} files matching your search."
+
+        if "path" in tool_data and "screenshot" in tool_data:
+            # Screenshot tool
+            return "I've taken a screenshot and saved it successfully."
+
+        # Generic response for other tool types
+        if "success" in tool_data:
+            if tool_data.get("success"):
+                return "I've completed the requested action successfully."
+            else:
+                return "I tried to complete the action but encountered an issue."
+
+        # Default fallback
+        return f"I've processed your request: {original_request}"
 
 
 # Global instances

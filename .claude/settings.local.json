@@ -28,7 +28,17 @@
       "Bash(powershell -Command \"Start-Sleep -Seconds 10\")",
       "Bash(cross-env NODE_OPTIONS=\"--max-old-space-size=4096\" npm run dev)",
       "Bash(powershell -Command \"Start-Sleep -Seconds 15\")",
-      "Bash(timeout /t 5 /nobreak)"
+      "Bash(timeout /t 5 /nobreak)",
+      "Bash(powershell -Command \"Test-Path ''F:\\\\Voice_Assistant\\\\config\\\\google_credentials.json''\")",
+      "Bash(pip install:*)",
+      "Bash(powershell -Command:*)",
+      "Bash(.specify/scripts/powershell/check-prerequisites.ps1 -Json)",
+      "Bash(playwright install)",
+      "Bash(source .venv/Scripts/activate)",
+      "Bash(=0.109.0 uvicorn[standard])",
+      "Bash(del test_tools_verification.py final_verification.py)",
+      "Bash(wc:*)",
+      "WebSearch"
     ]
   }
 }

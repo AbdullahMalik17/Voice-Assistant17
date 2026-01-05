@@ -38,6 +38,14 @@ A privacy-first, cross-platform voice assistant with agentic AI capabilities inc
 
 See [Quickstart Guide](specs/001-voice-assistant-baseline/quickstart.md) for detailed setup instructions.
 
+### Prerequisites
+
+- **Python 3.10+** (Required for sentence-transformers)
+- **Node.js 18+** (For web interface)
+- **npm** or **yarn** (For web dependencies)
+- **Audio Input Device** (Microphone)
+- **Audio Output Device** (Speakers/Headphones)
+
 ### Installation
 
 ```bash
@@ -45,42 +53,243 @@ See [Quickstart Guide](specs/001-voice-assistant-baseline/quickstart.md) for det
 git clone https://github.com/your-org/voice-assistant.git
 cd voice-assistant
 
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+# Create virtual environment (Python 3.10+ required)
+python -m venv .venv
+
+# Activate virtual environment
+# On Windows:
+.venv\Scripts\activate
+# On macOS/Linux:
+source .venv/bin/activate
 
 # Install dependencies
 pip install -r requirements.txt
 
+# OR use UV for faster installation (10-100x faster!)
+# Install UV first: irm https://astral.sh/uv/install.ps1 | iex
+# Then: uv pip install -r requirements.txt
+
 # Configure environment
 cp config/.env.template config/.env
-# Edit config/.env with your API keys (including MEM0_API_KEY for persistent memory)
+# Edit config/.env with your API keys:
+#   - GEMINI_API_KEY (required for LLM)
+#   - OPENAI_API_KEY (optional, for STT)
+#   - ELEVENLABS_API_KEY (optional, for TTS)
+#   - PICOVOICE_ACCESS_KEY (required for wake word)
 ```
 
-### Running
+### Running the Project
 
+#### 🚀 Quick Start (Recommended for Testing)
+
+**Step 1: Install Core Dependencies**
 ```bash
-# Terminal 1: Start the backend API server
-cd F:\Voice_Assistant
+# Install essential backend packages (if not using venv)
+python -m pip install fastapi uvicorn[standard] pydantic pydantic-settings python-dotenv pyyaml numpy google-genai ollama
+```
+
+**Step 2: Start Backend Server**
+```bash
+# From project root directory
 python -m uvicorn src.api.websocket_server:app --host 0.0.0.0 --port 8000
 
-# Terminal 2: Start the web interface (from project root)
-cd F:\Voice_Assistant\web
-npm install
-npm run dev
-# Web interface will be available at http://localhost:3000 (or 3001 if 3000 is busy)
-
-# Or run test mode without wake word (keyboard trigger)
-python test_assistant.py
+# You should see:
+# INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
 ```
+
+**Step 3: Start Web Interface** (In a new terminal)
+```bash
+cd web
+npm install  # First time only
+npm run dev
+
+# You should see:
+# ▲ Next.js 14.1.0
+# - Local: http://localhost:3000
+```
+
+**Step 4: Access the Application**
+- Open browser: http://localhost:3000
+- You should see the Voice Assistant chat interface
+- Backend API: http://localhost:8000
+- Health check: http://localhost:8000/health
+
+---
+
+#### 📋 Detailed Setup Options
+
+**Option 1: Web Interface (Full Stack) - Complete Setup**
+
+**Terminal 1 - Backend Server:**
+```bash
+# Navigate to project root
+cd D:\Voice_Assistant
+
+# Option A: Using virtual environment (recommended)
+.venv\Scripts\activate  # Windows
+source .venv/bin/activate  # macOS/Linux
+pip install -r requirements.txt
+python -m uvicorn src.api.websocket_server:app --host 0.0.0.0 --port 8000
+
+# Option B: Using system Python (if venv issues)
+python -m pip install --user fastapi uvicorn[standard] pydantic pydantic-settings python-dotenv pyyaml numpy google-genai ollama
+python -m uvicorn src.api.websocket_server:app --host 0.0.0.0 --port 8000
+
+# Backend will start on: http://0.0.0.0:8000
+# WebSocket endpoint: ws://localhost:8000/ws/voice
+```
+
+**Terminal 2 - Frontend Server:**
+```bash
+# Navigate to web directory
+cd D:\Voice_Assistant\web
+
+# Install Node.js dependencies (first time only)
+npm install
+
+# Start development server
+npm run dev
+
+# Or use yarn
+yarn install  # first time
+yarn dev
+
+# Frontend will start on: http://localhost:3000
+# If port 3000 is busy, Next.js will use port 3001
+```
+
+**Verify Both Services:**
+```bash
+# Check backend health
+curl http://localhost:8000/health
+
+# Expected response:
+# {"status":"healthy","version":"2.0.0","services":{...},"active_sessions":0}
+
+# Check frontend (in browser)
+# Open: http://localhost:3000
+```
+
+---
+
+**Option 2: Test Mode (Voice-only, No Wake Word)**
+
+For quick testing without the web interface:
+
+```bash
+# Activate virtual environment
+.venv\Scripts\activate  # Windows
+source .venv/bin/activate  # macOS/Linux
+
+# Run test mode (press ENTER to record)
+python test_assistant.py
+
+# Press ENTER when you see:
+# "Press ENTER to record..."
+# Speak for up to 20 seconds
+# The assistant will transcribe and respond
+```
+
+---
+
+**Option 3: Full CLI Mode (With Wake Word Detection)**
+
+For hands-free voice activation:
+
+```bash
+# Activate virtual environment
+.venv\Scripts\activate  # Windows
+source .venv/bin/activate  # macOS/Linux
+
+# Ensure wake word model is available
+# PICOVOICE_ACCESS_KEY must be set in config/.env
+
+# Run full assistant
+python -m src.cli.assistant
+
+# Say "Hey Assistant" to activate
+# Speak your command
+# Wait for response
+```
+
+---
+
+#### 🛑 Stopping the Services
+
+**Stop Backend Server:**
+```bash
+# In the terminal running backend, press:
+Ctrl + C
+
+# Or find and kill the process:
+# Windows:
+tasklist | findstr python
+taskkill /PID <process_id> /F
+
+# Linux/macOS:
+ps aux | grep uvicorn
+kill <process_id>
+```
+
+**Stop Frontend Server:**
+```bash
+# In the terminal running frontend, press:
+Ctrl + C
+
+# Or kill the Node.js process:
+# Windows:
+tasklist | findstr node
+taskkill /PID <process_id> /F
+
+# Linux/macOS:
+ps aux | grep node
+kill <process_id>
+```
+
+---
+
+#### 🔍 Port Management
+
+**Default Ports:**
+- Backend API: `8000`
+- Frontend UI: `3000`
+- WebSocket: `8000/ws/voice`
+
+**Check if Ports are in Use:**
+```bash
+# Windows:
+netstat -ano | findstr "8000"
+netstat -ano | findstr "3000"
+
+# Linux/macOS:
+lsof -i :8000
+lsof -i :3000
+```
+
+**Change Default Ports:**
+```bash
+# Backend - use different port:
+python -m uvicorn src.api.websocket_server:app --host 0.0.0.0 --port 8080
+
+# Frontend - Next.js will auto-assign if 3000 is busy
+# Or manually specify:
+npm run dev -- -p 3001
+```
+
+---
 
 ### Web Interface Usage
+
 1. Open browser to `http://localhost:3000`
-2. Use text input for typing messages
-3. Hold SPACEBAR to record voice messages
-4. Click speaker icons to replay voice responses
-5. See conversation history with audio playback controls
-```
+2. **Text Input**: Type messages directly in the input field
+3. **Voice Input**: Hold SPACEBAR to record voice messages (or click microphone button)
+4. **Audio Playback**: Click speaker icons to replay voice responses
+5. **Conversation History**: View full chat history with audio playback controls
+
+**Connection Status:**
+- 🟢 Green dot: Connected to backend
+- 🔴 Red dot: Disconnected (check backend server)
+- WebSocket auto-reconnects if connection drops
 
 ### Example Commands
 
@@ -155,7 +364,7 @@ python test_assistant.py
 | Wake Word | pvporcupine (Picovoice) |
 | STT | OpenAI Whisper (local/API) |
 | Audio Preprocessing | noisereduce, webrtcvad, scipy |
-| LLM | Gemini API + Ollama (local) |
+| LLM | OpenAI GPT-3.5/4 + Gemini + Ollama (local) |
 | TTS | ElevenLabs + Piper (local) |
 | Persistent Memory | Mem0 Cloud (semantic search) |
 | Semantic Memory | ChromaDB + sentence-transformers |
@@ -301,6 +510,10 @@ context:
 ## Testing
 
 ```bash
+# Activate virtual environment first
+.venv\Scripts\activate  # Windows
+source .venv/bin/activate  # macOS/Linux
+
 # Run all tests
 pytest
 
@@ -311,6 +524,69 @@ pytest --cov=src --cov-report=html
 pytest tests/unit/           # Unit tests
 pytest tests/integration/    # Integration tests
 ```
+
+## Troubleshooting
+
+### Virtual Environment Issues
+
+**Problem**: `uvicorn` or other modules not found
+```bash
+# Solution: Ensure virtual environment is activated
+.venv\Scripts\activate  # Windows
+source .venv/bin/activate  # macOS/Linux
+
+# Verify activation (you should see (.venv) in prompt)
+# Then reinstall dependencies if needed:
+pip install -r requirements.txt
+```
+
+### API Key Issues
+
+**Problem**: Services failing with authentication errors
+```bash
+# Solution: Check .env file in config/ directory
+# Required keys:
+#   GEMINI_API_KEY=your-key-here
+#   PICOVOICE_ACCESS_KEY=your-key-here
+# Optional keys:
+#   OPENAI_API_KEY=your-key-here
+#   ELEVENLABS_API_KEY=your-key-here
+```
+
+### Audio Device Issues
+
+**Problem**: No audio input/output detected
+```bash
+# Solution 1: List available audio devices
+python -c "import sounddevice; print(sounddevice.query_devices())"
+
+# Solution 2: Update config/assistant_config.yaml
+# Set input_device and output_device to correct device index
+```
+
+### Web Interface Not Loading
+
+**Problem**: Cannot connect to `localhost:3000`
+```bash
+# Solution: Ensure both backend and frontend are running
+# Backend should be on port 8000
+# Frontend should be on port 3000
+# Check for port conflicts: netstat -ano | findstr "8000\|3000"
+```
+
+### Import Errors
+
+**Problem**: `ModuleNotFoundError` for project modules
+```bash
+# Solution: Run from project root directory
+cd D:\Voice_Assistant
+python test_assistant.py  # Not from subdirectories
+```
+
+For more help, see:
+- [Quickstart Guide](specs/001-voice-assistant-baseline/quickstart.md)
+- [Troubleshooting Guide](docs/troubleshooting.md)
+- Open a GitHub issue
 
 ## CI/CD
 
@@ -333,7 +609,7 @@ GitHub Actions workflow includes:
 
 ## Development Status
 
-**Current Version**: 2.1.0 (Persistent Memory + Web Interface)
+**Current Version**: 2.1.0 (Agentic AI with Web Interface)
 
 ### Completed Features
 - [x] Voice pipeline (STT → Intent → LLM → TTS)
@@ -366,6 +642,51 @@ See [CLAUDE.md](CLAUDE.md) for development guidelines.
 ## License
 
 [Your License Here]
+
+## Quick Reference
+
+### Current Setup (Configured)
+- ✅ **LLM**: OpenAI GPT-3.5-Turbo (no C++ compiler needed!)
+- ✅ **STT**: OpenAI Whisper API
+- ✅ **TTS**: ElevenLabs API
+- ✅ **Backend**: Running on http://localhost:8000
+- ✅ **Frontend**: Running on http://localhost:3000
+
+### Starting Services (Quick Commands)
+```bash
+# Terminal 1 - Backend
+python -m uvicorn src.api.websocket_server:app --host 0.0.0.0 --port 8000
+
+# Terminal 2 - Frontend
+cd web && npm run dev
+
+# Access: http://localhost:3000
+```
+
+### Switching AI Providers
+
+**To use Gemini instead of OpenAI:**
+```bash
+# Edit config/assistant_config.yaml
+llm:
+  api_provider: "gemini"
+  api_model: "gemini-2.5-flash"
+
+# Restart backend
+```
+
+**To use local Ollama (no API needed):**
+```bash
+# Install Ollama: https://ollama.ai
+ollama pull llama2
+
+# Edit config/assistant_config.yaml
+llm:
+  primary_mode: "local"
+  local_model: "llama2:7b"
+
+# Restart backend
+```
 
 ## Support
 

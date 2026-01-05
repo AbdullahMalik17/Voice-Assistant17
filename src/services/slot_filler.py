@@ -96,7 +96,7 @@ class SlotFillingResult:
 DEFAULT_SLOT_DEFINITIONS: Dict[str, List[SlotDefinition]] = {
     "set_timer": [
         SlotDefinition(
-            name="duration",
+            name="duration_seconds",
             entity_type=EntityType.DURATION,
             required=True,
             prompt="How long should I set the timer for?",
