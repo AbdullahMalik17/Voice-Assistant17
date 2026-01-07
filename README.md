@@ -289,10 +289,6 @@ GitHub Actions workflow includes:
 
 See [CLAUDE.md](CLAUDE.md) for development guidelines.
 
-## License
-
-[Your License Here]
-
 ## Support
 
 1. Check the [Quickstart Guide](specs/001-voice-assistant-baseline/quickstart.md)
