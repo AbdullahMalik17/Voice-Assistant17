@@ -41,7 +41,16 @@
       "WebSearch",
       "Bash(netstat:*)",
       "Bash(taskkill:*)",
-      "Bash(set:*)"
+      "Bash(set:*)",
+      "Bash(git filter-branch:*)",
+      "Bash(git clean:*)",
+      "Bash(git filter-repo:*)",
+      "Bash(git branch:*)",
+      "Bash(git rebase:*)",
+      "Bash(del nul)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(rm:*)"
     ]
   }
 }
