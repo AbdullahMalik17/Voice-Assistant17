@@ -74,9 +74,10 @@ class LoggingConfig(BaseModel):
 
 class WakeWordConfig(BaseModel):
     """Wake word detection configuration"""
-    library: str = "pvporcupine"
+    library: str = "openwakeword"
     sensitivity: float = Field(default=0.5, ge=0.0, le=1.0)
     model_path: str = "models/wake_word/"
+    models: list[str] = Field(default_factory=lambda: ["alexa", "hey_jarvis"])
 
 
 class AudioPreprocessorConfig(BaseModel):
@@ -108,7 +109,7 @@ class STTConfig(BaseModel):
     api_provider: str = "openai"
     language: str = "en"
     fallback_timeout_ms: int = Field(default=2000, ge=500, le=5000)
-    confidence_threshold: float = Field(default=0.6, ge=0.0, le=1.0)
+    confidence_threshold: float = Field(default=0.4, ge=0.0, le=1.0)
     clarification_prompt: str = "I didn't catch that clearly. Could you repeat?"
 
     @field_validator('primary_mode')
@@ -168,7 +169,7 @@ class TTSConfig(BaseModel):
 
 class IntentConfig(BaseModel):
     """Intent classification configuration"""
-    confidence_threshold: float = Field(default=0.6, ge=0.0, le=1.0)
+    confidence_threshold: float = Field(default=0.4, ge=0.0, le=1.0)
     types: list[str] = Field(default_factory=lambda: ["INFORMATIONAL", "TASK_BASED", "CONVERSATIONAL"])
     entity_extraction: bool = True
 
@@ -240,7 +241,6 @@ class Config:
         self.openai_api_key = os.getenv('OPENAI_API_KEY')
         self.gemini_api_key = os.getenv('GEMINI_API_KEY')
         self.elevenlabs_api_key = os.getenv('ELEVENLABS_API_KEY')
-        self.picovoice_access_key = os.getenv('PICOVOICE_ACCESS_KEY')
 
         # Service modes
         if os.getenv('STT_MODE'):

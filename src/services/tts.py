@@ -4,6 +4,10 @@ Converts text to spoken audio using ElevenLabs API with Piper fallback
 """
 
 import time
+import subprocess
+import platform
+import os
+import tempfile
 from io import BytesIO
 from pathlib import Path
 from typing import Optional
@@ -27,7 +31,7 @@ class TTSService:
     """
     Text-to-Speech service with hybrid architecture
     Primary: ElevenLabs API
-    Fallback: Piper (local)
+    Fallback: Piper (local) or System TTS
     """
 
     def __init__(
@@ -88,7 +92,8 @@ class TTSService:
                 message=f'TTS synthesis failed: {str(e)}',
                 error=str(e)
             )
-            raise
+            # Don't raise, just return None so the app continues
+            return None
 
         finally:
             # Calculate duration
@@ -119,11 +124,16 @@ class TTSService:
             raise RuntimeError("ElevenLabs API key not configured")
 
         try:
+            # Determine voice ID
+            voice_id = "pNInz6obpgDQGcFmaJgB"  # Adam voice (default)
+            if self.config.tts.voice and self.config.tts.voice != "default":
+                voice_id = self.config.tts.voice
+
             # Generate audio using ElevenLabs v2 API
             # Using text_to_speech.convert() method
             # Use MP3 format for web browser compatibility
             audio_generator = self.elevenlabs_client.text_to_speech.convert(
-                voice_id="JBFqnCBsd6RMkjVDRZzb",  # Rachel voice (default)
+                voice_id=voice_id,
                 text=text,
                 model_id="eleven_multilingual_v2",
                 output_format="mp3_44100_128"  # MP3 format for web playback
@@ -140,7 +150,12 @@ class TTSService:
             raise RuntimeError(f"ElevenLabs API error: {str(e)}")
 
     def _synthesize_local(self, text: str) -> bytes:
-        """Synthesize using Piper (local TTS)"""
+        """Synthesize using Piper (local TTS) or System TTS"""
+        system = platform.system()
+        
+        if system == "Windows":
+            return self._synthesize_windows(text)
+            
         if not PIPER_AVAILABLE:
             # Fallback: Generate simple tone or use system TTS
             # For baseline, we'll use a placeholder
@@ -150,6 +165,44 @@ class TTSService:
         # This requires downloading Piper models and voice files
         # See: https://github.com/rhasspy/piper
         raise NotImplementedError("Piper TTS not yet implemented")
+
+    def _synthesize_windows(self, text: str) -> bytes:
+        """Synthesize using Windows PowerShell System.Speech"""
+        try:
+            # Create a temporary file
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+                temp_path = f.name
+            
+            # PowerShell command to save TTS to file
+            # Use a simpler approach to avoid quoting issues
+            ps_script = f"""
+            Add-Type -AssemblyName System.Speech
+            $synth = New-Object System.Speech.Synthesis.SpeechSynthesizer
+            $synth.SetOutputToWaveFile('{temp_path}')
+            $synth.Speak('{text.replace("'", "''")}')
+            $synth.SetOutputToNull()
+            """
+            
+            # Run PowerShell
+            subprocess.run(["powershell", "-Command", ps_script], check=True, capture_output=True)
+            
+            # Read the file
+            if os.path.exists(temp_path) and os.path.getsize(temp_path) > 0:
+                with open(temp_path, "rb") as f:
+                    audio_bytes = f.read()
+            else:
+                raise RuntimeError("TTS output file is empty or missing")
+                
+            # Clean up
+            try:
+                os.remove(temp_path)
+            except:
+                pass
+            
+            return audio_bytes
+            
+        except Exception as e:
+            raise RuntimeError(f"Windows TTS failed: {str(e)}")
 
     def _play_audio(self, audio_bytes: bytes) -> None:
         """Play audio through speakers"""

@@ -1,6 +1,7 @@
 """
 Audio Utilities for Voice Assistant
 Cross-platform audio I/O using PyAudio with sounddevice fallback
+Supports both PCM and MP3 audio formats
 """
 
 import platform
@@ -23,6 +24,13 @@ try:
     SOUNDDEVICE_AVAILABLE = True
 except ImportError:
     SOUNDDEVICE_AVAILABLE = False
+
+try:
+    from pydub import AudioSegment
+    from pydub.utils import make_chunks
+    PYDUB_AVAILABLE = True
+except ImportError:
+    PYDUB_AVAILABLE = False
 
 
 class AudioConfig:
@@ -223,13 +231,74 @@ class AudioUtils:
         else:
             raise RuntimeError("No audio backend available. Install pyaudio or sounddevice.")
 
+    def _is_mp3(self, audio_data: bytes) -> bool:
+        """Detect if audio data is MP3 format"""
+        if len(audio_data) < 3:
+            return False
+        # Check for MP3 header signatures
+        # ID3 tag (ID3v2)
+        if audio_data[:3] == b'ID3':
+            return True
+        # MPEG frame sync (0xFFE or 0xFFF)
+        if len(audio_data) >= 2 and (audio_data[0] == 0xFF and (audio_data[1] & 0xE0) == 0xE0):
+            return True
+        return False
+
+    def _decode_mp3_to_pcm(self, mp3_data: bytes) -> bytes:
+        """Decode MP3 to PCM audio bytes"""
+        if not PYDUB_AVAILABLE:
+            raise RuntimeError("pydub is required for MP3 decoding. Install with: pip install pydub")
+
+        # Load MP3 from bytes
+        audio_segment = AudioSegment.from_file(BytesIO(mp3_data), format="mp3")
+
+        # Convert to target sample rate and channels
+        if audio_segment.frame_rate != self.config.sample_rate:
+            audio_segment = audio_segment.set_frame_rate(self.config.sample_rate)
+
+        if audio_segment.channels != self.config.channels:
+            if self.config.channels == 1:
+                audio_segment = audio_segment.set_channels(1)
+            else:
+                audio_segment = audio_segment.set_channels(self.config.channels)
+
+        # Convert to 16-bit samples
+        audio_segment = audio_segment.set_sample_width(2)  # 2 bytes = 16-bit
+
+        # Extract raw PCM data
+        return audio_segment.raw_data
+
+    def _ensure_pcm(self, audio_data: bytes) -> bytes:
+        """Ensure audio data is in PCM format, decode MP3 if needed"""
+        if len(audio_data) == 0:
+            raise ValueError("Audio data is empty")
+
+        # Check if data needs to be decoded from MP3
+        if self._is_mp3(audio_data):
+            return self._decode_mp3_to_pcm(audio_data)
+
+        # Check if buffer size is valid for int16
+        if len(audio_data) % 2 != 0:
+            # Odd number of bytes - likely corrupted or wrong format
+            # Try MP3 decoding as fallback
+            if PYDUB_AVAILABLE:
+                try:
+                    return self._decode_mp3_to_pcm(audio_data)
+                except Exception:
+                    pass
+            raise ValueError(f"Invalid PCM audio data: size {len(audio_data)} is not a multiple of 2")
+
+        return audio_data
+
     def record_audio(self, duration_seconds: float) -> bytes:
         """Record audio for specified duration"""
         return self.backend.record(duration_seconds)
 
     def play_audio(self, audio_data: bytes) -> None:
-        """Play audio data"""
-        self.backend.play(audio_data)
+        """Play audio data (supports both PCM and MP3)"""
+        # Detect and convert MP3 to PCM if needed
+        pcm_data = self._ensure_pcm(audio_data)
+        self.backend.play(pcm_data)
 
     def save_audio(self, audio_data: bytes, file_path: Path) -> None:
         """Save audio data to WAV file"""

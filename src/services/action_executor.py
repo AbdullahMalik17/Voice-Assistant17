@@ -16,6 +16,7 @@ from ..models.action_script import ActionScript, ActionCategory, Platform
 from ..models.system_status import get_system_status, SystemStatus
 from ..models.intent import Intent, IntentType, ActionType
 from ..utils.logger import EventLogger, MetricsLogger
+from ..agents.desktop_tools import VolumeControlTool, MediaControlTool, BrightnessControlTool, PowerControlTool
 
 
 class ActionExecutor:
@@ -154,6 +155,9 @@ class ActionExecutor:
 
             elif intent.action_type == ActionType.LAUNCH_APP:
                 result = self._execute_launch_app(intent)
+
+            elif intent.action_type == ActionType.SYSTEM_CONTROL:
+                result = self._execute_system_control(intent)
 
             elif intent.action_type == ActionType.FILE_OPERATION:
                 result = "File operations are not yet implemented."
@@ -323,6 +327,45 @@ class ActionExecutor:
                 error=str(e)
             )
             return f"Failed to open {app_name}: {str(e)}"
+
+    def _execute_system_control(self, intent: Intent) -> str:
+        """Execute system control actions (volume, brightness, etc.)"""
+        control_type = intent.entities.get('control_type')
+        action = intent.entities.get('action')
+        
+        if not control_type:
+            return f"I'm not sure what system control to perform. Target: {intent.entities.get('target', 'unknown')}"
+
+        result = None
+        
+        if control_type == 'volume':
+            tool = VolumeControlTool()
+            level = intent.entities.get('level')
+            if not action: action = 'set' if level is not None else 'up'
+            result = tool.execute(action=action, level=level)
+            
+        elif control_type == 'media':
+            tool = MediaControlTool()
+            if not action: action = 'play_pause'
+            result = tool.execute(action=action)
+            
+        elif control_type == 'brightness':
+            tool = BrightnessControlTool()
+            level = intent.entities.get('level', 50)
+            result = tool.execute(level=level)
+            
+        elif control_type == 'power':
+            tool = PowerControlTool()
+            if not action: return "Please specify power action (shutdown, restart, sleep)"
+            result = tool.execute(action=action)
+            
+        else:
+            return f"Unsupported control type: {control_type}"
+
+        if result and result.success:
+            return f"Executed {control_type} control: {action or 'default'}"
+        else:
+            return f"Failed to execute control: {result.error if result else 'Unknown error'}"
 
     def test_service(self) -> bool:
         """Test action executor with system status query"""

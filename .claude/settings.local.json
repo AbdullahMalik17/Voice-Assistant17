@@ -38,7 +38,10 @@
       "Bash(=0.109.0 uvicorn[standard])",
       "Bash(del test_tools_verification.py final_verification.py)",
       "Bash(wc:*)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(netstat:*)",
+      "Bash(taskkill:*)",
+      "Bash(set:*)"
     ]
   }
 }

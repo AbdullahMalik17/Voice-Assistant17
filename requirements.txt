@@ -17,6 +17,7 @@ sounddevice>=0.4.6
 soundfile>=0.12.1
 numpy>=1.26.3
 scipy>=1.12.0  # Signal processing for audio
+pydub>=0.25.1  # Audio format conversion (MP3 to PCM)
 
 # ===========================
 # Audio Preprocessing (Noise Reduction)
@@ -27,7 +28,7 @@ noisereduce>=3.0.0  # Spectral noise reduction
 # ===========================
 # Wake Word Detection
 # ===========================
-pvporcupine==3.0.2
+openwakeword>=0.6.0  # Free, open-source wake word detection
 
 # ===========================
 # Speech-to-Text (STT)
@@ -75,9 +76,13 @@ opentelemetry-api==1.29.0
 opentelemetry-sdk==1.29.0
 
 # ===========================
-# System Utilities
+# System Control & Automation
 # ===========================
 psutil==5.9.7  # System status monitoring
+pycaw==20240210  # Advanced Audio Control
+pywin32==306     # Windows API access
+fuzzywuzzy==0.18.0 # Fuzzy string matching
+python-Levenshtein==0.23.0 # Speedup for fuzzywuzzy
 pyyaml==6.0.1  # YAML configuration
 requests==2.31.0  # HTTP requests
 python-dateutil>=2.8.2  # Date parsing for entity extraction

@@ -6,12 +6,14 @@ interface UseVoiceRecorderOptions {
   onRecordingComplete?: (audioBlob: Blob, base64: string) => void;
   onError?: (error: Error) => void;
   maxDuration?: number; // Maximum recording duration in seconds
+  minDuration?: number; // Minimum recording duration in seconds
 }
 
 export function useVoiceRecorder({
   onRecordingComplete,
   onError,
-  maxDuration = 60,
+  maxDuration = 30, // Maximum 30 seconds (auto-stop)
+  minDuration = 0.3, // Minimum 300ms recording (more forgiving)
 }: UseVoiceRecorderOptions = {}) {
   const [isRecording, setIsRecording] = useState(false);
   const [audioLevel, setAudioLevel] = useState(0);
@@ -25,6 +27,7 @@ export function useVoiceRecorder({
   const streamRef = useRef<MediaStream | null>(null);
   const durationIntervalRef = useRef<NodeJS.Timeout>();
   const maxDurationTimeoutRef = useRef<NodeJS.Timeout>();
+  const recordingStartTimeRef = useRef<number>(0);
 
   const cleanup = useCallback(() => {
     if (animationRef.current) {
@@ -86,6 +89,7 @@ export function useVoiceRecorder({
 
       const mediaRecorder = new MediaRecorder(stream, { mimeType });
       chunksRef.current = [];
+      recordingStartTimeRef.current = Date.now();
 
       mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
@@ -94,13 +98,53 @@ export function useVoiceRecorder({
       };
 
       mediaRecorder.onstop = async () => {
+        const recordingDuration = (Date.now() - recordingStartTimeRef.current) / 1000;
+
+        // Check if recording is too short
+        if (recordingDuration < minDuration) {
+          console.warn(`Recording too short: ${recordingDuration.toFixed(2)}s (min: ${minDuration}s)`);
+          onError?.(new Error('Recording too short. Please hold and speak for a bit longer.'));
+          cleanup();
+          setDuration(0);
+          return;
+        }
+
+        // Check if we have audio data
+        if (chunksRef.current.length === 0) {
+          console.error('No audio data collected');
+          onError?.(new Error('No audio data collected. Please try again.'));
+          cleanup();
+          setDuration(0);
+          return;
+        }
+
         const audioBlob = new Blob(chunksRef.current, { type: mimeType });
+
+        // Check blob size
+        if (audioBlob.size === 0) {
+          console.error('Audio blob is empty');
+          onError?.(new Error('Audio recording failed. Please try again.'));
+          cleanup();
+          setDuration(0);
+          return;
+        }
+
+        console.log(`Audio recorded: ${audioBlob.size} bytes, ${recordingDuration.toFixed(2)}s`);
 
         // Convert to base64
         const reader = new FileReader();
         reader.onloadend = () => {
           const base64 = (reader.result as string).split(',')[1];
-          onRecordingComplete?.(audioBlob, base64);
+          if (base64 && base64.length > 0) {
+            onRecordingComplete?.(audioBlob, base64);
+          } else {
+            console.error('Base64 conversion failed');
+            onError?.(new Error('Audio encoding failed. Please try again.'));
+          }
+        };
+        reader.onerror = () => {
+          console.error('FileReader error');
+          onError?.(new Error('Audio encoding failed. Please try again.'));
         };
         reader.readAsDataURL(audioBlob);
 
@@ -125,18 +169,28 @@ export function useVoiceRecorder({
 
     } catch (error) {
       console.error('Failed to start recording:', error);
-      onError?.(error as Error);
+      const errorMessage = error instanceof Error
+        ? error.message
+        : 'Microphone access denied or not available';
+      onError?.(new Error(errorMessage));
       cleanup();
     }
-  }, [cleanup, maxDuration, onRecordingComplete, onError]);
+  }, [cleanup, maxDuration, minDuration, onRecordingComplete, onError]);
 
   const stopRecording = useCallback(() => {
+    const recordingDuration = (Date.now() - recordingStartTimeRef.current) / 1000;
+
+    // Warn if stopping too quickly
+    if (recordingDuration < minDuration && mediaRecorderRef.current?.state === 'recording') {
+      console.warn(`Stopping recording after only ${recordingDuration.toFixed(2)}s`);
+    }
+
     if (mediaRecorderRef.current?.state === 'recording') {
       mediaRecorderRef.current.stop();
     }
     setIsRecording(false);
     setAudioLevel(0);
-  }, []);
+  }, [minDuration]);
 
   return {
     isRecording,

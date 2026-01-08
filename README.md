@@ -646,7 +646,7 @@ See [CLAUDE.md](CLAUDE.md) for development guidelines.
 ## Quick Reference
 
 ### Current Setup (Configured)
-- ✅ **LLM**: OpenAI GPT-3.5-Turbo (no C++ compiler needed!)
+- ✅ **LLM**: Gemini 2.5 Flash (no C++ compiler needed!)
 - ✅ **STT**: OpenAI Whisper API
 - ✅ **TTS**: ElevenLabs API
 - ✅ **Backend**: Running on http://localhost:8000

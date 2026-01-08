@@ -1,13 +1,15 @@
 """
 Wake Word Detection Service
-Continuous audio monitoring for wake word detection using pvporcupine
+Continuous audio monitoring for wake word detection using OpenWakeWord
+Free, open-source wake word detection - no API keys required!
 """
 
 import struct
 import time
 from typing import Callable, Optional
 
-import pvporcupine
+import numpy as np
+from openwakeword.model import Model as OpenWakeWordModel
 
 from ..core.config import Config
 from ..utils.audio_utils import AudioConfig, AudioUtils
@@ -16,8 +18,11 @@ from ..utils.logger import EventLogger
 
 class WakeWordDetector:
     """
-    Wake word detection service using pvporcupine
+    Wake word detection service using OpenWakeWord
     Monitors audio stream for wake word activation
+
+    OpenWakeWord is a free, open-source wake word detection system that requires
+    no API keys and supports multiple pre-trained models and custom training.
     """
 
     def __init__(
@@ -32,52 +37,50 @@ class WakeWordDetector:
         self.audio_utils = audio_utils
         self.on_wake_word = on_wake_word
 
-        # Initialize pvporcupine
-        self.porcupine: Optional[pvporcupine.Porcupine] = None
+        # Initialize OpenWakeWord
+        self.oww_model: Optional[OpenWakeWordModel] = None
         self._is_running = False
         self._detection_start_time: Optional[float] = None
 
-    def initialize(self) -> None:
-        """Initialize pvporcupine wake word detector"""
-        try:
-            # Check if access key is available
-            if not self.config.picovoice_access_key:
-                raise RuntimeError("Picovoice access key not found. Get one free at https://console.picovoice.ai/")
+        # Audio configuration for OpenWakeWord (16kHz required)
+        self.sample_rate = 16000
+        self.chunk_size = 1280  # 80ms at 16kHz
 
-            # Create porcupine instance
-            # Using built-in "porcupine" keyword for baseline
-            # For custom "Hey Assistant", users need to train on Picovoice Console
-            self.porcupine = pvporcupine.create(
-                access_key=self.config.picovoice_access_key,
-                keywords=["porcupine"],  # Built-in wake word
-                sensitivities=[self.config.wake_word.sensitivity]
+    def initialize(self) -> None:
+        """Initialize OpenWakeWord wake word detector"""
+        try:
+            # Create OpenWakeWord model with pre-trained models
+            # Available models: alexa, hey_jarvis, hey_mycroft, etc.
+            self.oww_model = OpenWakeWordModel(
+                wakeword_models=self.config.wake_word.models,
+                inference_framework='onnx'  # Use ONNX for cross-platform support
             )
 
             self.logger.info(
                 event='WAKE_WORD_SERVICE_INITIALIZED',
-                message=f'Wake word detector initialized with sensitivity {self.config.wake_word.sensitivity}',
+                message=f'OpenWakeWord initialized with models: {self.config.wake_word.models}',
+                models=self.config.wake_word.models,
                 sensitivity=self.config.wake_word.sensitivity,
-                sample_rate=self.porcupine.sample_rate,
-                frame_length=self.porcupine.frame_length
+                sample_rate=self.sample_rate,
+                chunk_size=self.chunk_size
             )
-
         except Exception as e:
             self.logger.error(
-                event='WAKE_WORD_INIT_FAILED',
-                message=f'Failed to initialize wake word detector: {str(e)}',
+                event='WAKE_WORD_INITIALIZATION_FAILED',
+                message=f'Failed to initialize OpenWakeWord: {str(e)}',
                 error=str(e)
             )
-            raise
+            raise RuntimeError(f"OpenWakeWord initialization failed: {str(e)}")
 
     def start(self) -> None:
         """Start wake word detection loop"""
-        if not self.porcupine:
+        if not self.oww_model:
             raise RuntimeError("Wake word detector not initialized. Call initialize() first.")
 
         self._is_running = True
         self.logger.info(
             event='WAKE_WORD_DETECTION_STARTED',
-            message='Wake word detection started'
+            message='Wake word detection started (OpenWakeWord)'
         )
 
         try:
@@ -92,11 +95,11 @@ class WakeWordDetector:
 
     def _detection_loop(self) -> None:
         """Main detection loop"""
-        # Audio config for pvporcupine
+        # Audio config for OpenWakeWord (requires 16kHz)
         audio_config = AudioConfig(
-            sample_rate=self.porcupine.sample_rate,
+            sample_rate=self.sample_rate,
             channels=1,
-            chunk_size=self.porcupine.frame_length
+            chunk_size=self.chunk_size
         )
 
         # Create audio backend
@@ -113,31 +116,30 @@ class WakeWordDetector:
 
         self.logger.info(
             event='WAKE_WORD_LISTENING',
-            message=f'Listening for wake word "{self.config.assistant.wake_word}"...'
+            message=f'Listening for wake words: {", ".join(self.config.wake_word.models)}...'
         )
 
         while self._is_running:
             try:
-                # Read audio frame
-                pcm = stream.read(
-                    self.porcupine.frame_length,
+                # Read audio frame (1280 samples = 80ms at 16kHz)
+                audio_data = stream.read(
+                    self.chunk_size,
                     exception_on_overflow=False
                 )
 
                 # Convert bytes to int16 array
-                pcm = struct.unpack_from(
-                    "h" * self.porcupine.frame_length,
-                    pcm
-                )
+                audio_array = np.frombuffer(audio_data, dtype=np.int16)
 
-                # Process frame
+                # Process frame with OpenWakeWord
                 self._detection_start_time = time.time()
-                keyword_index = self.porcupine.process(pcm)
+                prediction = self.oww_model.predict(audio_array)
 
-                if keyword_index >= 0:
-                    # Wake word detected!
-                    detection_duration_ms = int((time.time() - self._detection_start_time) * 1000)
-                    self._handle_wake_word_detected(detection_duration_ms)
+                # Check if any wake word was detected
+                for model_name, score in prediction.items():
+                    if score >= self.config.wake_word.sensitivity:
+                        detection_duration_ms = int((time.time() - self._detection_start_time) * 1000)
+                        self._handle_wake_word_detected(model_name, score, detection_duration_ms)
+                        break  # Only trigger once per detection
 
             except Exception as e:
                 self.logger.error(
@@ -151,12 +153,18 @@ class WakeWordDetector:
         stream.close()
         audio_backend.close()
 
-    def _handle_wake_word_detected(self, duration_ms: int) -> None:
+    def _handle_wake_word_detected(self, model_name: str, confidence: float, duration_ms: int) -> None:
         """Handle wake word detection event"""
-        confidence = self.config.wake_word.sensitivity  # Porcupine doesn't provide confidence
-
         # Log detection
         self.logger.wake_word_detected(
+            confidence=confidence,
+            duration_ms=duration_ms
+        )
+
+        self.logger.info(
+            event='WAKE_WORD_DETECTED',
+            message=f'Wake word "{model_name}" detected with confidence {confidence:.2f}',
+            model=model_name,
             confidence=confidence,
             duration_ms=duration_ms
         )
@@ -176,9 +184,9 @@ class WakeWordDetector:
         """Stop wake word detection"""
         self._is_running = False
 
-        if self.porcupine:
-            self.porcupine.delete()
-            self.porcupine = None
+        if self.oww_model:
+            # OpenWakeWord doesn't require explicit cleanup
+            self.oww_model = None
 
         self.logger.info(
             event='WAKE_WORD_SERVICE_STOPPED',
@@ -208,6 +216,37 @@ class WakeWordDetector:
             sensitivity=sensitivity,
             restarted=was_running
         )
+
+    def add_custom_model(self, model_path: str) -> None:
+        """
+        Add a custom trained wake word model
+
+        Args:
+            model_path: Path to the custom .onnx or .tflite model file
+        """
+        if not self.oww_model:
+            raise RuntimeError("Wake word detector not initialized")
+
+        try:
+            # OpenWakeWord supports loading custom models dynamically
+            self.oww_model = OpenWakeWordModel(
+                wakeword_models=self.config.wake_word.models,
+                custom_verifier_models={model_path: 0.5},
+                inference_framework='onnx'
+            )
+
+            self.logger.info(
+                event='CUSTOM_WAKE_WORD_MODEL_ADDED',
+                message=f'Added custom wake word model: {model_path}',
+                model_path=model_path
+            )
+        except Exception as e:
+            self.logger.error(
+                event='CUSTOM_WAKE_WORD_MODEL_FAILED',
+                message=f'Failed to add custom model: {str(e)}',
+                error=str(e)
+            )
+            raise
 
 
 def create_wake_word_detector(

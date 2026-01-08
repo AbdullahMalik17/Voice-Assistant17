@@ -210,22 +210,32 @@ class VoiceAssistant:
         )
 
         # Initialize wake word detector
-        self.wake_word_detector = create_wake_word_detector(
-            config=self.config,
-            logger=self.event_logger,
-            audio_utils=self.audio_utils,
-            on_wake_word=self._on_wake_word_detected
-        )
-
-        self.event_logger.info(
-            event='WAKE_WORD_SERVICE_READY',
-            message=f'Wake word detector ready (sensitivity: {self.config.wake_word.sensitivity})',
-            sensitivity=self.config.wake_word.sensitivity
-        )
+        try:
+            self.wake_word_detector = create_wake_word_detector(
+                config=self.config,
+                logger=self.event_logger,
+                audio_utils=self.audio_utils,
+                on_wake_word=self._on_wake_word_detected
+            )
+            self.event_logger.info(
+                event='WAKE_WORD_SERVICE_READY',
+                message=f'Wake word detector ready (sensitivity: {self.config.wake_word.sensitivity})',
+                sensitivity=self.config.wake_word.sensitivity
+            )
+        except RuntimeError as e:
+            self.event_logger.warning(
+                event='WAKE_WORD_INIT_FAILED',
+                message=f'Wake word detector failed: {e}. Falling back to manual activation.',
+                error=str(e)
+            )
+            self.wake_word_detector = None
 
         print(f"✓ Voice Assistant v{self.config.assistant.version} initialized")
-        print(f"✓ Wake word: \"{self.config.assistant.wake_word}\"")
-        print(f"✓ Sensitivity: {self.config.wake_word.sensitivity}")
+        if self.wake_word_detector:
+            print(f"✓ Wake word: \"{self.config.assistant.wake_word}\"")
+            print(f"✓ Sensitivity: {self.config.wake_word.sensitivity}")
+        else:
+            print("⚠️  Wake word detection disabled. Press Enter to activate.")
         print(f"✓ STT mode: {self.config.stt.primary_mode}")
         print(f"✓ LLM mode: {self.config.llm.primary_mode}")
         print(f"✓ TTS mode: {self.config.tts.primary_mode}")
@@ -283,7 +293,10 @@ class VoiceAssistant:
 
     def _on_wake_word_detected(self) -> None:
         """Callback when wake word is detected"""
-        print(f"\n🎙️  Wake word detected!")
+        if not self.wake_word_detector: # Manual activation
+             print(f"\n🎙️  Manual activation detected!")
+        else:
+            print(f"\n🎙️  Wake word detected!")
 
         # Check if we're already processing - if so, request interrupt
         with self._processing_lock:
@@ -324,8 +337,10 @@ class VoiceAssistant:
             except:
                 pass  # Don't crash on TTS error
 
-        print("✓ Ready for next command. Returning to wake word detection...")
-        print()
+        # For manual activation loop, we don't print this
+        if self.wake_word_detector:
+            print("✓ Ready for next command. Returning to wake word detection...")
+            print()
 
     def _process_voice_command(self) -> None:
         """Process complete voice command pipeline with interrupt support"""
@@ -380,6 +395,22 @@ class VoiceAssistant:
                     return
 
             except Exception as e:
+                error_str = str(e)
+                if "401" in error_str and "API key" in error_str:
+                    self.event_logger.error(
+                        event='STT_AUTH_FAILED',
+                        message='OpenAI API authentication failed',
+                        error='Invalid API Key'
+                    )
+                    print("❌ STT Authentication failed: Invalid OpenAI API Key.")
+                    print("   Please check your configuration or .env file.")
+                    
+                    try:
+                        self.tts_service.synthesize("Please check your API key configuration.", play_audio=True)
+                    except:
+                        pass
+                    return
+
                 self.event_logger.error(
                     event='STT_FAILED',
                     message=f'Speech recognition failed: {str(e)}',
@@ -500,6 +531,17 @@ class VoiceAssistant:
             # Always clear processing state
             with self._processing_lock:
                 self._is_processing = False
+    
+    def _manual_activation_loop(self) -> None:
+        """Loop that waits for user to press Enter to activate."""
+        while True:
+            try:
+                input("Press Enter to speak...")
+                self._on_wake_word_detected()
+            except EOFError: # Handle piped input or script ending
+                break
+            except KeyboardInterrupt:
+                break
 
     def run(self) -> None:
         """Start the voice assistant main loop"""
@@ -507,13 +549,19 @@ class VoiceAssistant:
             print("=" * 50)
             print("Voice Assistant - Ready")
             print("=" * 50)
-            print(f"Say \"{self.config.assistant.wake_word}\" to activate")
+            if self.wake_word_detector:
+                print(f"Say \"{self.config.assistant.wake_word}\" to activate")
+            else:
+                print("Wake word detection failed. Press Enter to activate.")
             print("Press Ctrl+C to exit")
             print("=" * 50)
             print()
 
-            # Start wake word detection loop
-            self.wake_word_detector.start()
+            # Start main loop
+            if self.wake_word_detector:
+                self.wake_word_detector.start()
+            else:
+                self._manual_activation_loop()
 
         except KeyboardInterrupt:
             print("\n\nShutting down gracefully...")

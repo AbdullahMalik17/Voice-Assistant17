@@ -36,7 +36,7 @@ INTENT_CLASSIFICATION_PROMPT = '''Classify the following user input into one of 
 - Email operations (send, check, search email)
 - Drive operations (access files, upload, download)
 - Browser automation (navigate, search, screenshot)
-- System control (find file, take screenshot, switch window)
+- System control (volume, brightness, media, power, files, windows)
 - File operations (create, delete, copy, move)
 
 **INFORMATIONAL** - User is asking for information:
@@ -120,6 +120,10 @@ class IntentClassifier:
                 r'\b(take|capture)\s+(a\s+)?(screenshot|screen\s+capture)',
                 r'\b(minimize|maximize|close)\s+(window|all)',
                 r'\b(switch|change)\s+to\s+(.+)',
+                r'\b(turn|set|change|increase|decrease|mute|unmute)\s+(the\s+)?(volume|sound|audio)',
+                r'\b(turn|set|change|increase|decrease)\s+(the\s+)?(brightness|screen)',
+                r'\b(play|pause|stop|next|previous)\s+(music|media|song|track)',
+                r'\b(shutdown|restart|reboot|sleep|lock)\s+(the\s+)?(computer|pc|system|laptop)',
             ],
             ActionType.FILE_OPERATION: [
                 r'\b(create|make|new)\s+(file|folder|directory)',
@@ -484,21 +488,63 @@ class IntentClassifier:
         elif action_type == ActionType.SYSTEM_CONTROL:
             # Extract system control details
             groups = [g for g in match.groups() if g]
-            if groups:
+            
+            # Check for specific control types based on keywords
+            text = match.string.lower()
+            
+            if any(k in text for k in ['volume', 'sound', 'audio']):
+                entities['control_type'] = 'volume'
+                if 'mute' in text: entities['action'] = 'mute'
+                elif 'unmute' in text: entities['action'] = 'unmute'
+                elif 'increase' in text or 'up' in text: entities['action'] = 'up'
+                elif 'decrease' in text or 'down' in text: entities['action'] = 'down'
+                elif 'set' in text: entities['action'] = 'set'
+                
+                # Try to find a number for 'set'
+                num_match = re.search(r'\b(\d+)\b', text)
+                if num_match:
+                    entities['level'] = int(num_match.group(1))
+
+            elif any(k in text for k in ['brightness', 'screen']):
+                entities['control_type'] = 'brightness'
+                if 'increase' in text or 'up' in text: entities['level'] = 100 # simplified
+                elif 'decrease' in text or 'down' in text: entities['level'] = 0 # simplified
+                elif 'set' in text: 
+                    num_match = re.search(r'\b(\d+)\b', text)
+                    if num_match:
+                        entities['level'] = int(num_match.group(1))
+
+            elif any(k in text for k in ['media', 'music', 'song', 'track']):
+                entities['control_type'] = 'media'
+                if 'play' in text or 'pause' in text: entities['action'] = 'play_pause'
+                elif 'next' in text: entities['action'] = 'next'
+                elif 'previous' in text: entities['action'] = 'previous'
+                elif 'stop' in text: entities['action'] = 'stop'
+
+            elif any(k in text for k in ['shutdown', 'restart', 'reboot', 'sleep', 'lock']):
+                entities['control_type'] = 'power'
+                if 'shutdown' in text: entities['action'] = 'shutdown'
+                elif 'restart' in text or 'reboot' in text: entities['action'] = 'restart'
+                elif 'sleep' in text: entities['action'] = 'sleep'
+                elif 'lock' in text: entities['action'] = 'lock'
+
+            elif groups:
                 entities['target'] = groups[-1]
 
         return entities
 
     def _score_keywords(self, text: str, keywords: list) -> float:
         """Score text based on keyword presence"""
-        matches = 0
+        text_lower = text.lower()
         for keyword in keywords:
-            if keyword in text:
-                matches += 1
-
-        # Normalize score
-        if len(keywords) > 0:
-            return min(matches / len(keywords) * 2.0, 1.0)  # Amplify score slightly
+            # Check for exact word match or phrase match
+            # Add word boundaries for short keywords to avoid false positives
+            if len(keyword.split()) == 1 and len(keyword) < 4:
+                if re.search(r'\b' + re.escape(keyword) + r'\b', text_lower):
+                    return 0.85
+            else:
+                if keyword in text_lower:
+                    return 0.85
         return 0.0
 
     def _requires_network(

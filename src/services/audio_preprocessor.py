@@ -2,11 +2,13 @@
 Audio Preprocessor Module
 Provides noise reduction, acoustic echo cancellation, and audio normalization
 for improved STT accuracy in noisy environments.
+Supports both PCM and MP3 audio formats.
 """
 
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Optional, Dict, Any, Tuple
+from io import BytesIO
 import time
 
 import numpy as np
@@ -24,6 +26,13 @@ try:
     WEBRTCVAD_AVAILABLE = True
 except ImportError:
     WEBRTCVAD_AVAILABLE = False
+
+# Optional import for MP3 decoding
+try:
+    from pydub import AudioSegment
+    PYDUB_AVAILABLE = True
+except ImportError:
+    PYDUB_AVAILABLE = False
 
 from scipy import signal
 from scipy.ndimage import uniform_filter1d
@@ -483,6 +492,62 @@ class AudioPreprocessor:
         )
         self.normalizer = Normalizer(target_db=config.target_level_db)
 
+    def _is_mp3(self, audio_data: bytes) -> bool:
+        """Detect if audio data is MP3 format"""
+        if len(audio_data) < 3:
+            return False
+        # Check for MP3 header signatures
+        if audio_data[:3] == b'ID3':  # ID3v2 tag
+            return True
+        if len(audio_data) >= 2 and (audio_data[0] == 0xFF and (audio_data[1] & 0xE0) == 0xE0):  # MPEG frame sync
+            return True
+        return False
+
+    def _decode_mp3_to_pcm(self, mp3_data: bytes) -> bytes:
+        """Decode MP3 to PCM audio bytes"""
+        if not PYDUB_AVAILABLE:
+            raise RuntimeError("pydub is required for MP3 decoding. Install with: pip install pydub")
+
+        # Load MP3 from bytes
+        audio_segment = AudioSegment.from_file(BytesIO(mp3_data), format="mp3")
+
+        # Convert to target sample rate and channels
+        if audio_segment.frame_rate != self.config.sample_rate:
+            audio_segment = audio_segment.set_frame_rate(self.config.sample_rate)
+
+        if audio_segment.channels != self.config.channels:
+            if self.config.channels == 1:
+                audio_segment = audio_segment.set_channels(1)
+            else:
+                audio_segment = audio_segment.set_channels(self.config.channels)
+
+        # Convert to 16-bit samples
+        audio_segment = audio_segment.set_sample_width(2)  # 2 bytes = 16-bit
+
+        # Extract raw PCM data
+        return audio_segment.raw_data
+
+    def _ensure_pcm(self, audio_data: bytes) -> bytes:
+        """Ensure audio data is in PCM format, decode MP3 if needed"""
+        if len(audio_data) == 0:
+            raise ValueError("Audio data is empty")
+
+        # Check if data needs to be decoded from MP3
+        if self._is_mp3(audio_data):
+            return self._decode_mp3_to_pcm(audio_data)
+
+        # Check if buffer size is valid for int16
+        if len(audio_data) % 2 != 0:
+            # Odd number of bytes - try MP3 decoding as fallback
+            if PYDUB_AVAILABLE:
+                try:
+                    return self._decode_mp3_to_pcm(audio_data)
+                except Exception:
+                    pass
+            raise ValueError(f"Invalid PCM audio data: size {len(audio_data)} is not a multiple of 2")
+
+        return audio_data
+
     def process(
         self,
         audio_bytes: bytes,
@@ -492,7 +557,7 @@ class AudioPreprocessor:
         Process raw audio bytes through the preprocessing pipeline.
 
         Args:
-            audio_bytes: Raw 16-bit PCM audio bytes
+            audio_bytes: Raw audio bytes (supports both PCM and MP3)
             reference_audio: Optional reference for AEC (TTS output)
 
         Returns:
@@ -500,8 +565,14 @@ class AudioPreprocessor:
         """
         start_time = time.time()
 
+        # Ensure audio is in PCM format
+        try:
+            pcm_bytes = self._ensure_pcm(audio_bytes)
+        except Exception as e:
+            raise ValueError(f"Audio preprocessing failed: {str(e)}")
+
         # Convert bytes to numpy array
-        audio_array = np.frombuffer(audio_bytes, dtype=np.int16)
+        audio_array = np.frombuffer(pcm_bytes, dtype=np.int16)
         original_array = audio_array.copy()
 
         processed = audio_array
@@ -516,9 +587,14 @@ class AudioPreprocessor:
 
         # 1. Apply AEC if enabled and reference provided
         if self.config.aec_enabled and reference_audio is not None:
-            ref_array = np.frombuffer(reference_audio, dtype=np.int16)
-            processed = self.aec.apply(processed, ref_array)
-            aec_applied = True
+            try:
+                ref_pcm = self._ensure_pcm(reference_audio)
+                ref_array = np.frombuffer(ref_pcm, dtype=np.int16)
+                processed = self.aec.apply(processed, ref_array)
+                aec_applied = True
+            except Exception as e:
+                # AEC failed, continue without it
+                pass
 
         # 2. Apply noise reduction
         if self.config.noise_reduction_enabled:
@@ -545,7 +621,7 @@ class AudioPreprocessor:
 
         return ProcessedAudio(
             audio_bytes=processed.tobytes(),
-            original_bytes=audio_bytes,
+            original_bytes=pcm_bytes,  # Use PCM bytes for consistency
             sample_rate=self.config.sample_rate,
             processing_time_ms=processing_time,
             noise_reduced=noise_reduced,

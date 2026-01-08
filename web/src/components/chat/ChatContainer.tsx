@@ -6,8 +6,9 @@ import { Message, WebSocketMessage } from '@/types';
 import { MessageList } from './MessageList';
 import { ChatInput } from './ChatInput';
 import { PushToTalk } from '../voice/PushToTalk';
-import { Wifi, WifiOff, Loader2, Settings } from 'lucide-react';
+import { Wifi, WifiOff, Loader2, Settings, Zap } from 'lucide-react';
 import { generateId } from '@/lib/utils';
+import { ThemeToggle } from '../ui/ThemeToggle';
 
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000/ws/voice';
 console.log('WS_URL:', WS_URL);
@@ -84,7 +85,7 @@ export function ChatContainer() {
           {
             id: generateId(),
             type: 'system',
-            content: 'Connected to Voice Assistant',
+            content: 'Neural link established • System online',
             timestamp: new Date(),
           },
         ]);
@@ -101,7 +102,7 @@ export function ChatContainer() {
         {
           id: generateId(),
           type: 'system',
-          content: 'Disconnected. Attempting to reconnect...',
+          content: 'Connection lost • Attempting reconnect...',
           timestamp: new Date(),
         },
       ]);
@@ -153,9 +154,9 @@ export function ChatContainer() {
   const getStatusColor = () => {
     switch (status) {
       case 'connected':
-        return 'text-green-500';
+        return 'text-neon-green';
       case 'connecting':
-        return 'text-yellow-500';
+        return 'text-neon-yellow';
       case 'error':
         return 'text-red-500';
       default:
@@ -163,43 +164,79 @@ export function ChatContainer() {
     }
   };
 
+  const getStatusGlow = () => {
+    switch (status) {
+      case 'connected':
+        return 'drop-shadow-[0_0_8px_rgba(0,255,136,0.8)]';
+      case 'connecting':
+        return 'drop-shadow-[0_0_8px_rgba(255,234,0,0.8)]';
+      default:
+        return '';
+    }
+  };
+
   return (
-    <div className="flex flex-col h-screen max-w-4xl mx-auto bg-gray-50">
-      {/* Header */}
-      <header className="flex items-center justify-between px-6 py-4 bg-white border-b shadow-sm">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
-            <span className="text-white text-lg">🤖</span>
+    <div className="flex flex-col h-screen max-w-6xl mx-auto relative">
+      {/* Animated background grid (dark mode only) */}
+      <div className="absolute inset-0 dark:cyber-grid-bg opacity-20 pointer-events-none" />
+
+      {/* Header with glassmorphism */}
+      <header className="relative z-10 px-6 py-4 glass border-b dark:border-neon-blue/20 card-shadow animate-slide-down">
+        <div className="flex items-center justify-between">
+          {/* Logo and title */}
+          <div className="flex items-center gap-4">
+            {/* Animated logo */}
+            <div className="relative w-12 h-12 rounded-xl bg-gradient-to-br from-neon-blue via-neon-purple to-neon-pink p-[2px] animate-float">
+              <div className="w-full h-full rounded-xl bg-dark-bg dark:bg-black flex items-center justify-center">
+                <Zap className="w-6 h-6 text-neon-blue dark:drop-shadow-[0_0_10px_rgba(0,245,255,0.8)]" />
+              </div>
+            </div>
+
+            <div>
+              <h1 className="text-xl font-bold bg-gradient-to-r from-neon-blue via-neon-purple to-neon-pink bg-clip-text text-transparent font-[family-name:var(--font-orbitron)]">
+                NEXUS AI
+              </h1>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Neural Voice Interface v2.0
+              </p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-lg font-semibold text-gray-800">Voice Assistant</h1>
-            <p className="text-xs text-gray-500">Agentic AI System v2.0</p>
+
+          {/* Status and controls */}
+          <div className="flex items-center gap-4">
+            {/* Connection status */}
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full glass">
+              {status === 'connected' ? (
+                <Wifi className={`w-4 h-4 ${getStatusColor()} ${getStatusGlow()}`} />
+              ) : status === 'connecting' ? (
+                <Loader2 className={`w-4 h-4 ${getStatusColor()} ${getStatusGlow()} animate-spin`} />
+              ) : (
+                <WifiOff className={`w-4 h-4 ${getStatusColor()}`} />
+              )}
+              <span className={`text-xs font-medium uppercase tracking-wider ${getStatusColor()}`}>
+                {status}
+              </span>
+            </div>
+
+            {/* Theme toggle */}
+            <ThemeToggle />
+
+            {/* Settings button */}
+            <button
+              className="p-2 rounded-full glass hover:bg-white/10 dark:hover:bg-neon-blue/10 transition-all duration-300 btn-hover group"
+              aria-label="Settings"
+            >
+              <Settings className="w-5 h-5 text-gray-600 dark:text-gray-300 group-hover:text-neon-blue transition-colors duration-300 group-hover:rotate-90 transform" />
+            </button>
           </div>
-        </div>
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            {status === 'connected' ? (
-              <Wifi className={`w-5 h-5 ${getStatusColor()}`} />
-            ) : status === 'connecting' ? (
-              <Loader2 className={`w-5 h-5 ${getStatusColor()} animate-spin`} />
-            ) : (
-              <WifiOff className={`w-5 h-5 ${getStatusColor()}`} />
-            )}
-            <span className={`text-sm capitalize ${getStatusColor()}`}>
-              {status}
-            </span>
-          </div>
-          <button className="p-2 hover:bg-gray-100 rounded-full transition-colors">
-            <Settings className="w-5 h-5 text-gray-400" />
-          </button>
         </div>
       </header>
 
       {/* Messages */}
       <MessageList messages={messages} isProcessing={isProcessing} />
 
-      {/* Input Area */}
-      <div className="bg-white border-t shadow-lg">
+      {/* Input Area with glassmorphism */}
+      <div className="relative z-10 glass border-t dark:border-neon-blue/20 card-shadow">
         <div className="flex items-center gap-4 p-4">
           <ChatInput
             onSend={handleSendText}
@@ -212,16 +249,22 @@ export function ChatContainer() {
         </div>
 
         {/* Keyboard hint */}
-        <div className="pb-3 text-center text-xs text-gray-400">
-          Hold{' '}
-          <kbd className="px-1.5 py-0.5 bg-gray-100 border border-gray-200 rounded text-gray-500">
-            Space
-          </kbd>{' '}
-          to talk • Press{' '}
-          <kbd className="px-1.5 py-0.5 bg-gray-100 border border-gray-200 rounded text-gray-500">
-            Enter
-          </kbd>{' '}
-          to send
+        <div className="pb-3 text-center text-xs text-gray-400 dark:text-gray-500">
+          <div className="flex flex-col gap-1">
+            <span className="inline-flex items-center justify-center gap-1">
+              🎤 Hold mic button or{' '}
+              <kbd className="px-2 py-1 bg-gray-100 dark:bg-dark-card border border-gray-300 dark:border-neon-blue/30 rounded text-gray-600 dark:text-neon-blue font-mono text-[10px]">
+                Space
+              </kbd>
+              {' '}for 5-10 seconds • Release when done
+            </span>
+            <span className="inline-flex items-center justify-center gap-1 text-[10px]">
+              Type message + press{' '}
+              <kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-dark-card border border-gray-300 dark:border-neon-blue/30 rounded text-gray-600 dark:text-neon-blue font-mono text-[9px]">
+                Enter
+              </kbd>
+            </span>
+          </div>
         </div>
       </div>
     </div>

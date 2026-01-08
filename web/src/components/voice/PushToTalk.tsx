@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useCallback } from 'react';
-import { Mic, MicOff } from 'lucide-react';
+import { Mic, Radio } from 'lucide-react';
 import { useVoiceRecorder } from '@/hooks/useVoiceRecorder';
 import { cn } from '@/lib/utils';
 
@@ -56,53 +56,109 @@ export function PushToTalk({ onAudioReady, disabled }: PushToTalkProps) {
   };
 
   return (
-    <div className="flex flex-col items-center gap-2">
+    <div className="flex flex-col items-center gap-3">
       <button
         onMouseDown={startRecording}
         onMouseUp={stopRecording}
-        onMouseLeave={isRecording ? stopRecording : undefined}
         onTouchStart={startRecording}
         onTouchEnd={stopRecording}
         disabled={disabled}
         className={cn(
           'relative flex items-center justify-center w-16 h-16 rounded-full',
-          'transition-all duration-200 ease-in-out',
-          'focus:outline-none focus:ring-4 focus:ring-blue-300',
+          'transition-all duration-300 ease-out',
+          'focus:outline-none focus-visible:ring-4 focus-visible:ring-neon-blue/50',
+          'btn-hover group',
           isRecording
-            ? 'bg-red-500 hover:bg-red-600 scale-110'
-            : 'bg-blue-500 hover:bg-blue-600',
+            ? 'bg-gradient-to-br from-red-500 to-red-600 scale-110 animate-pulse'
+            : 'bg-gradient-to-br from-neon-blue via-neon-purple to-neon-pink hover:scale-105',
           disabled && 'opacity-50 cursor-not-allowed'
         )}
         style={{
           boxShadow: isRecording
-            ? `0 0 ${20 + audioLevel * 40}px rgba(239, 68, 68, ${0.5 + audioLevel * 0.5})`
-            : undefined,
+            ? `0 0 ${25 + audioLevel * 50}px rgba(239, 68, 68, ${0.6 + audioLevel * 0.4}),
+               0 0 ${50 + audioLevel * 100}px rgba(239, 68, 68, ${0.3 + audioLevel * 0.3})`
+            : '0 0 20px rgba(0, 245, 255, 0.3), 0 0 40px rgba(191, 0, 255, 0.2)',
         }}
         aria-label={isRecording ? 'Recording... Release to send' : 'Hold to speak'}
       >
         {isRecording ? (
-          <Mic className="w-8 h-8 text-white animate-pulse" />
+          <Radio className="w-8 h-8 text-white animate-pulse" />
         ) : (
-          <MicOff className="w-8 h-8 text-white" />
+          <Mic className="w-8 h-8 text-white group-hover:scale-110 transition-transform" />
         )}
 
-        {/* Audio level indicator ring */}
+        {/* Animated pulse rings when recording */}
         {isRecording && (
-          <div
-            className="absolute inset-0 rounded-full border-4 border-white opacity-50"
-            style={{
-              transform: `scale(${1 + audioLevel * 0.3})`,
-              transition: 'transform 50ms ease-out',
-            }}
-          />
+          <>
+            {/* Inner ring */}
+            <div
+              className="absolute inset-0 rounded-full border-2 border-white/50"
+              style={{
+                transform: `scale(${1 + audioLevel * 0.3})`,
+                transition: 'transform 100ms ease-out',
+              }}
+            />
+            {/* Outer ring */}
+            <div
+              className="absolute inset-0 rounded-full border-2 border-white/30"
+              style={{
+                transform: `scale(${1.2 + audioLevel * 0.5})`,
+                transition: 'transform 100ms ease-out',
+              }}
+            />
+          </>
+        )}
+
+        {/* Static glow ring when not recording */}
+        {!isRecording && !disabled && (
+          <div className="absolute inset-0 rounded-full bg-gradient-to-br from-neon-blue/20 to-neon-purple/20 animate-glow-pulse" />
         )}
       </button>
 
-      {/* Duration display */}
+      {/* Duration display with futuristic styling */}
       {isRecording && (
-        <span className="text-sm text-red-500 font-mono">
-          {formatDuration(duration)}
+        <div className="flex flex-col items-center gap-1">
+          <div className="flex items-center gap-2 px-3 py-1 rounded-full glass border border-red-500/50 animate-pulse">
+            <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+            <span className="text-sm text-red-500 dark:text-red-400 font-mono font-bold tracking-wider">
+              {formatDuration(duration)}
+            </span>
+          </div>
+          {duration < 5 && (
+            <span className="text-[9px] text-gray-400 dark:text-gray-500">
+              Keep holding... (5-10s ideal)
+            </span>
+          )}
+          {duration >= 5 && duration < 10 && (
+            <span className="text-[9px] text-green-500 dark:text-green-400 animate-pulse">
+              ✓ Good! Release when done
+            </span>
+          )}
+          {duration >= 10 && duration < 25 && (
+            <span className="text-[9px] text-yellow-500 dark:text-yellow-400">
+              Release when done (auto-stop at 30s)
+            </span>
+          )}
+          {duration >= 25 && (
+            <span className="text-[9px] text-orange-500 dark:text-orange-400 animate-pulse">
+              ⚠ Auto-stopping soon...
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Recording hint when not recording */}
+      {!isRecording && !disabled && (
+        <span className="text-[10px] text-gray-500 dark:text-gray-400 font-medium uppercase tracking-wider text-center">
+          Click & Hold
         </span>
+      )}
+
+      {/* Recording active indicator */}
+      {isRecording && (
+        <div className="text-[10px] text-red-500 dark:text-red-400 font-bold uppercase tracking-wider animate-pulse text-center">
+          🔴 Recording... Release to send
+        </div>
       )}
     </div>
   );

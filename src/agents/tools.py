@@ -653,7 +653,22 @@ def create_default_registry() -> ToolRegistry:
         registry.register(DownloadDriveFileTool())
         registry.register(UploadDriveFileTool())
     except ImportError as e:
-        # Gmail/Drive tools optional if Google APIs not installed
+        # Register Gmail/Drive tools optional if Google APIs not installed
+        pass
+
+    # Register Desktop Automation Tools
+    try:
+        from .desktop_tools import (
+            VolumeControlTool,
+            MediaControlTool,
+            BrightnessControlTool,
+            PowerControlTool
+        )
+        registry.register(VolumeControlTool())
+        registry.register(MediaControlTool())
+        registry.register(BrightnessControlTool())
+        registry.register(PowerControlTool())
+    except ImportError:
         pass
 
     return registry
