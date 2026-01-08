@@ -643,51 +643,6 @@ See [CLAUDE.md](CLAUDE.md) for development guidelines.
 
 [Your License Here]
 
-## Quick Reference
-
-### Current Setup (Configured)
-- ✅ **LLM**: Gemini 2.5 Flash (no C++ compiler needed!)
-- ✅ **STT**: OpenAI Whisper API
-- ✅ **TTS**: ElevenLabs API
-- ✅ **Backend**: Running on http://localhost:8000
-- ✅ **Frontend**: Running on http://localhost:3000
-
-### Starting Services (Quick Commands)
-```bash
-# Terminal 1 - Backend
-python -m uvicorn src.api.websocket_server:app --host 0.0.0.0 --port 8000
-
-# Terminal 2 - Frontend
-cd web && npm run dev
-
-# Access: http://localhost:3000
-```
-
-### Switching AI Providers
-
-**To use Gemini instead of OpenAI:**
-```bash
-# Edit config/assistant_config.yaml
-llm:
-  api_provider: "gemini"
-  api_model: "gemini-2.5-flash"
-
-# Restart backend
-```
-
-**To use local Ollama (no API needed):**
-```bash
-# Install Ollama: https://ollama.ai
-ollama pull llama2
-
-# Edit config/assistant_config.yaml
-llm:
-  primary_mode: "local"
-  local_model: "llama2:7b"
-
-# Restart backend
-```
-
 ## Support
 
 1. Check the [Quickstart Guide](specs/001-voice-assistant-baseline/quickstart.md)
