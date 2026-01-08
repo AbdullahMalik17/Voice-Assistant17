@@ -10,6 +10,8 @@ export interface Message {
     intent?: string;
     confidence?: number;
     transcription?: string;
+    tool_execution?: boolean;
+    tool_results?: any;
   };
 }
 

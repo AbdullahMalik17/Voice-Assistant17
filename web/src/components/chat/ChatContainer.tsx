@@ -47,6 +47,8 @@ export function ChatContainer() {
           metadata: {
             intent: content.intent,
             confidence: content.confidence,
+            tool_execution: content.tool_execution,
+            tool_results: content.tool_results,
           },
           audioUrl: content.audio
             ? `data:audio/mp3;base64,${content.audio}`

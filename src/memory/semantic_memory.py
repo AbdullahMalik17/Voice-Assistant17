@@ -12,10 +12,9 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-# ChromaDB for vector storage
+# ChromaDB for vector storage (v1.4.0+)
 try:
     import chromadb
-    from chromadb.config import Settings
     CHROMADB_AVAILABLE = True
 except ImportError:
     CHROMADB_AVAILABLE = False
@@ -243,17 +242,18 @@ class SemanticMemory:
             self._embeddings: Dict[str, np.ndarray] = {}
 
     def _initialize_chromadb(self) -> None:
-        """Initialize ChromaDB client and collection"""
+        """Initialize ChromaDB client and collection (ChromaDB 1.4.0+ API)"""
         persist_path = Path(self.config.persist_directory)
         persist_path.mkdir(parents=True, exist_ok=True)
 
-        self.client = chromadb.Client(Settings(
-            chroma_db_impl="duckdb+parquet",
-            persist_directory=str(persist_path),
-            anonymized_telemetry=False
-        ))
+        # ChromaDB 1.4.0+ uses PersistentClient instead of Client(Settings(...))
+        self.client = chromadb.PersistentClient(
+            path=str(persist_path),
+            settings=chromadb.Settings(anonymized_telemetry=False)
+        )
 
         # Get or create collection
+        # Note: In 0.4.0+, get_or_create ignores metadata if collection exists
         self.collection = self.client.get_or_create_collection(
             name=self.config.collection_name,
             metadata={"hnsw:space": "cosine"}
@@ -603,9 +603,12 @@ class SemanticMemory:
         }
 
     def persist(self) -> None:
-        """Persist memory to disk (for ChromaDB)"""
-        if self.client is not None:
-            self.client.persist()
+        """
+        Persist memory to disk (for ChromaDB).
+        Note: ChromaDB 1.4.0+ auto-persists, so this is a no-op for compatibility.
+        """
+        # ChromaDB 1.4.0+ automatically persists all writes
+        pass
 
 
 def create_semantic_memory(

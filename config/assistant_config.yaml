@@ -66,7 +66,7 @@ stt:
 
 # Language Model (LLM)
 llm:
-  primary_mode: "hybrid"  # local, api, or hybrid
+  primary_mode: "api"  # local, api, or hybrid
   api_provider: "gemini"  # gemini or openai
   api_model: "gemini-2.5-flash"  # Model name for API
   local_provider: "ollama"  # Local LLM provider

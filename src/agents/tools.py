@@ -347,7 +347,10 @@ class LaunchAppTool(Tool):
         self._examples = [
             "Open Spotify",
             "Launch Chrome",
-            "Start Word"
+            "Start Word",
+            "Open Instagram",
+            "Launch Photos",
+            "Start Calculator"
         ]
 
     def execute(self, app_name: str, **params) -> ToolResult:
@@ -370,6 +373,12 @@ class LaunchAppTool(Tool):
                 "calculator": "calc.exe",
                 "terminal": "wt.exe",
                 "explorer": "explorer.exe",
+                "instagram": "start ms-instagram:",  # Instagram app
+                "store": "start ms-windows-store:",  # Microsoft Store
+                "photos": "start ms-photos:",  # Photos app
+                "mail": "start outlookmail:",  # Mail app
+                "calendar": "start outlookcal:",  # Calendar app
+                "settings": "start ms-settings:",  # Settings app
             },
             "darwin": {
                 "spotify": "open -a Spotify",
@@ -379,6 +388,7 @@ class LaunchAppTool(Tool):
                 "word": "open -a 'Microsoft Word'",
                 "terminal": "open -a Terminal",
                 "finder": "open -a Finder",
+                "instagram": "open -a 'Instagram'",  # Instagram app
             },
             "linux": {
                 "spotify": "spotify",
@@ -386,6 +396,7 @@ class LaunchAppTool(Tool):
                 "firefox": "firefox",
                 "terminal": "gnome-terminal",
                 "files": "nautilus",
+                "instagram": "instagram",  # If installed via snap or package manager
             }
         }
 
@@ -595,6 +606,54 @@ def create_default_registry() -> ToolRegistry:
         registry.register(BrowserTypeTool())
     except ImportError as e:
         # Browser tools optional if Playwright not installed
+        pass
+
+    # Register system control tools
+    try:
+        from .system_tools import (
+            FindFileTool,
+            TakeScreenshotTool,
+            GetSystemInfoTool,
+            MinimizeWindowsTool,
+            ListProcessesTool,
+            CreateFolderTool,
+            OpenFileLocationTool
+        )
+
+        registry.register(FindFileTool())
+        registry.register(TakeScreenshotTool())
+        registry.register(GetSystemInfoTool())
+        registry.register(MinimizeWindowsTool())
+        registry.register(ListProcessesTool())
+        registry.register(CreateFolderTool())
+        registry.register(OpenFileLocationTool())
+    except ImportError as e:
+        # System tools optional
+        pass
+
+    # Register Gmail and Drive API tools
+    try:
+        from .gmail_drive_tools import (
+            ListEmailsTool,
+            ReadEmailTool,
+            SearchEmailsTool,
+            SendEmailTool,
+            ListDriveFilesTool,
+            SearchDriveFilesTool,
+            DownloadDriveFileTool,
+            UploadDriveFileTool
+        )
+
+        registry.register(ListEmailsTool())
+        registry.register(ReadEmailTool())
+        registry.register(SearchEmailsTool())
+        registry.register(SendEmailTool())
+        registry.register(ListDriveFilesTool())
+        registry.register(SearchDriveFilesTool())
+        registry.register(DownloadDriveFileTool())
+        registry.register(UploadDriveFileTool())
+    except ImportError as e:
+        # Gmail/Drive tools optional if Google APIs not installed
         pass
 
     return registry

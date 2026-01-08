@@ -125,8 +125,24 @@ jobs:
 
       - name: Check dependencies for vulnerabilities
         run: |
-          pip-audit --requirement requirements.txt --ignore-vuln GHSA-XXXX-XXXX-XXXX
+          pip-audit --requirement requirements.txt --format json --output pip-audit-report.json || true
+          pip-audit --requirement requirements.txt
         continue-on-error: true
+
+      - name: Run Safety check
+        run: |
+          safety check --json --output safety-report.json || true
+          safety check
+        continue-on-error: true
+
+      - name: Upload security reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-reports
+          path: |
+            pip-audit-report.json
+            safety-report.json
+        if: always()
 
       - name: Upload Bandit report
         uses: actions/upload-artifact@v4
@@ -161,9 +177,20 @@ jobs:
           pip install -r requirements.txt
           pip install pytest pytest-asyncio
 
+      - name: Generate test audio fixtures
+        run: |
+          python tests/fixtures/audio_fixtures.py
+
       - name: Run integration tests
         run: |
-          pytest tests/integration/ -v -m "not slow"
+          pytest tests/integration/ -v -m "not slow" --cov=src --cov-report=term-missing
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        continue-on-error: true
+
+      - name: Run audio pipeline tests
+        run: |
+          pytest tests/integration/test_audio_pipeline.py -v
         env:
           PYTHONPATH: ${{ github.workspace }}
         continue-on-error: true

@@ -84,6 +84,11 @@ export function MessageBubble({ message }: MessageBubbleProps) {
                 {message.metadata.intent}
               </span>
             )}
+            {message.metadata.tool_execution && (
+              <span className="inline-block mt-1 px-2 py-0.5 bg-green-100 text-green-800 rounded-full ml-2">
+                Tool Execution
+              </span>
+            )}
           </div>
         )}
 
