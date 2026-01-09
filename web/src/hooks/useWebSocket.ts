@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useSession } from 'next-auth/react';
 import { WebSocketMessage, ConnectionStatus } from '@/types';
 
 interface UseWebSocketOptions {
@@ -20,6 +21,7 @@ export function useWebSocket({
   reconnectAttempts = 5,
   reconnectInterval = 3000,
 }: UseWebSocketOptions) {
+  const { data: session } = useSession();
   const [status, setStatus] = useState<ConnectionStatus>('disconnected');
   const [sessionId, setSessionId] = useState<string | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
@@ -50,7 +52,19 @@ export function useWebSocket({
     setStatus('connecting');
 
     try {
-      const ws = new WebSocket(url);
+      // Append JWT token to WebSocket URL if available
+      let wsUrl = url;
+      const accessToken = (session as any)?.accessToken;
+
+      if (accessToken) {
+        const separator = url.includes('?') ? '&' : '?';
+        wsUrl = `${url}${separator}token=${accessToken}`;
+        console.log('🔐 Connecting to WebSocket with authentication');
+      } else {
+        console.log('⚠️  Connecting to WebSocket without authentication');
+      }
+
+      const ws = new WebSocket(wsUrl);
 
       ws.onopen = () => {
         setStatus('connected');
@@ -92,7 +106,7 @@ export function useWebSocket({
       console.error('Failed to create WebSocket:', error);
       setStatus('error');
     }
-  }, [url, reconnectAttempts, reconnectInterval]);
+  }, [url, reconnectAttempts, reconnectInterval, session]);
 
   const disconnect = useCallback(() => {
     shouldConnectRef.current = false;
