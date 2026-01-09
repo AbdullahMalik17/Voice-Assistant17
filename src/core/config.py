@@ -127,7 +127,7 @@ class LLMConfig(BaseModel):
     api_provider: str = "gemini"
     api_model: str = "gemini-1.5-flash"
     local_provider: str = "ollama"
-    local_model: "llama2:7b"
+    local_model: str = "llama2:7b"
     temperature: float = Field(default=0.7, ge=0.0, le=2.0)
     max_tokens: int = Field(default=150, ge=50, le=32000)
     system_prompt: str = "You are a helpful voice assistant. Provide concise, spoken-friendly responses."
