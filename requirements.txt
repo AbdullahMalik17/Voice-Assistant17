@@ -59,6 +59,7 @@ playwright==1.51.0
 # ===========================
 # Semantic Memory (RAG)
 # ===========================
+mem0ai>=0.0.12  # Persistent memory service
 # chromadb==1.4.0           # Vector database for embeddings - Latest (Jan 2026)
 # sentence-transformers==5.2.0  # Embedding generation - Requires Python 3.10+
 
