@@ -6,9 +6,10 @@ import { Message, WebSocketMessage } from '@/types';
 import { MessageList } from './MessageList';
 import { ChatInput } from './ChatInput';
 import { PushToTalk } from '../voice/PushToTalk';
-import { Wifi, WifiOff, Loader2, Settings, Zap } from 'lucide-react';
+import { Wifi, WifiOff, Loader2, Settings, Zap, History } from 'lucide-react';
 import { generateId } from '@/lib/utils';
 import { ThemeToggle } from '../ui/ThemeToggle';
+import { ConversationSidebar } from './ConversationSidebar';
 
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000/ws/voice';
 console.log('WS_URL:', WS_URL);
@@ -16,6 +17,7 @@ console.log('WS_URL:', WS_URL);
 export function ChatContainer() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const handleMessage = useCallback((wsMessage: WebSocketMessage) => {
     if (wsMessage.type === 'response' || wsMessage.type === 'audio_response') {
@@ -176,9 +178,23 @@ export function ChatContainer() {
   };
 
   return (
-    <div className="flex flex-col h-screen max-w-6xl mx-auto relative">
-      {/* Animated background grid (dark mode only) */}
-      <div className="absolute inset-0 dark:cyber-grid-bg opacity-20 pointer-events-none" />
+    <div className="flex h-screen max-w-full relative">
+      {/* Conversation Sidebar */}
+      <ConversationSidebar
+        userId="default"
+        onSelectConversation={(sessionId) => {
+          console.log('Selected conversation:', sessionId);
+          // TODO: Load conversation history into messages
+        }}
+        currentSessionId={sessionId}
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+      />
+
+      {/* Main Chat Area */}
+      <div className="flex flex-col flex-1 h-screen max-w-6xl mx-auto relative">
+        {/* Animated background grid (dark mode only) */}
+        <div className="absolute inset-0 dark:cyber-grid-bg opacity-20 pointer-events-none" />
 
       {/* Header with glassmorphism */}
       <header className="relative z-10 px-6 py-4 glass border-b dark:border-neon-blue/20 card-shadow animate-slide-down">
@@ -217,6 +233,15 @@ export function ChatContainer() {
                 {status}
               </span>
             </div>
+
+            {/* History button */}
+            <button
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className="p-2 rounded-full glass hover:bg-white/10 dark:hover:bg-neon-blue/10 transition-all duration-300 btn-hover group"
+              aria-label="Conversation History"
+            >
+              <History className={`w-5 h-5 text-gray-600 dark:text-gray-300 group-hover:text-neon-blue transition-colors duration-300 ${sidebarOpen ? 'text-neon-blue' : ''}`} />
+            </button>
 
             {/* Theme toggle */}
             <ThemeToggle />
@@ -266,6 +291,7 @@ export function ChatContainer() {
             </span>
           </div>
         </div>
+      </div>
       </div>
     </div>
   );

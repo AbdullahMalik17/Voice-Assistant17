@@ -47,6 +47,7 @@ class ToolResult:
     """Result of a tool execution"""
     success: bool
     data: Optional[Any] = None
+    message: Optional[str] = None
     error: Optional[str] = None
     execution_time_ms: float = 0.0
     metadata: Dict[str, Any] = field(default_factory=dict)
@@ -55,6 +56,7 @@ class ToolResult:
         return {
             "success": self.success,
             "data": self.data,
+            "message": self.message,
             "error": self.error,
             "execution_time_ms": self.execution_time_ms,
             "metadata": self.metadata
@@ -574,8 +576,16 @@ class GetWeatherTool(Tool):
         )
 
 
-def create_default_registry() -> ToolRegistry:
-    """Create a registry with default built-in tools"""
+def create_default_registry(sqlite_store=None) -> ToolRegistry:
+    """
+    Create a registry with default built-in tools.
+
+    Args:
+        sqlite_store: Optional SqliteStore instance for conversation history tools
+
+    Returns:
+        ToolRegistry with all available tools registered
+    """
     registry = ToolRegistry()
 
     # Register built-in tools
@@ -670,5 +680,18 @@ def create_default_registry() -> ToolRegistry:
         registry.register(PowerControlTool())
     except ImportError:
         pass
+
+    # Register User Data Access Tools (conversation history, etc.)
+    if sqlite_store:
+        try:
+            from .user_tools import (
+                SearchConversationHistoryTool,
+                GetRecentConversationsTool
+            )
+            registry.register(SearchConversationHistoryTool(sqlite_store))
+            registry.register(GetRecentConversationsTool(sqlite_store))
+        except ImportError as e:
+            # User tools optional
+            pass
 
     return registry

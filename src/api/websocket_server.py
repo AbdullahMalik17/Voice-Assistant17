@@ -266,7 +266,10 @@ class VoiceAssistantHandler:
             try:
                 # Create tool registry with all available tools
                 from ..agents.tools import create_default_registry
-                tool_registry = create_default_registry()
+                # Pass sqlite_store to enable conversation history tools
+                tool_registry = create_default_registry(
+                    sqlite_store=self.sqlite_store if hasattr(self, 'sqlite_store') else None
+                )
 
                 # Create guardrails
                 self.guardrails = SafetyGuardrails()
@@ -376,6 +379,17 @@ class VoiceAssistantHandler:
                                         }
                                     )
 
+                                # Store tool execution in SQLite dialogue state
+                                if self.dialogue:
+                                    self.dialogue.update_session(
+                                        session_id=user_id,
+                                        user_input=text,
+                                        assistant_response=response_text,
+                                        intent="tool_execution",
+                                        intent_confidence=1.0,
+                                        entities={"tool_data": tool_data}
+                                    )
+
                                 # Generate TTS audio for tool response
                                 if self.tts:
                                     try:
@@ -433,6 +447,15 @@ class VoiceAssistantHandler:
             context_str = ""
             if persistent_context:
                 context_str = persistent_context + "\n\n"
+
+            # Add SQLite conversation history for better context
+            if self.dialogue:
+                dialogue_state = self.dialogue.get_session(user_id)
+                if dialogue_state and dialogue_state.turns:
+                    history_context = dialogue_state.get_context_for_llm(max_turns=10)
+                    if history_context:
+                        context_str += history_context + "\n\n"
+
             if context:
                 context_str += "\n".join([
                     f"{msg['role']}: {msg['content']}"
@@ -471,7 +494,14 @@ class VoiceAssistantHandler:
 
             # Update dialogue state if available (legacy)
             if self.dialogue:
-                self.dialogue.update_session(user_id, text, response)
+                self.dialogue.update_session(
+                    session_id=user_id,  # Using user_id as session_id for now
+                    user_input=text,
+                    assistant_response=response,
+                    intent=intent_result.intent_type if intent_result else "unknown",
+                    intent_confidence=intent_result.confidence if intent_result else 0.0,
+                    entities={}
+                )
 
             result = {
                 "text": response,
@@ -660,6 +690,24 @@ async def websocket_voice_endpoint(websocket: WebSocket):
                 session_id=session_id
             ).to_dict()
         )
+
+        # Load conversation history from SQLite if available
+        if handler and handler.dialogue:
+            dialogue_state = handler.dialogue.get_session(session_id)
+            if dialogue_state and dialogue_state.turns:
+                recent_turns = dialogue_state.get_recent_turns(10)
+                if recent_turns:
+                    await websocket.send_json(
+                        WebSocketMessage(
+                            type=MessageType.SYSTEM,
+                            content={
+                                "message": "Conversation history loaded",
+                                "turns": [t.to_dict() for t in recent_turns],
+                                "history_loaded": True
+                            },
+                            session_id=session_id
+                        ).to_dict()
+                    )
         while True:
             data = await websocket.receive_json()
             msg_type = data.get("type", "text")
@@ -825,6 +873,188 @@ async def transcribe_endpoint(request: dict):
             "text": result.text,
             "confidence": result.confidence
         }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Conversation History Endpoints
+@app.get("/api/conversations")
+async def get_all_conversations(user_id: str = "default", limit: int = 20):
+    """
+    Get user's recent conversation sessions.
+    Query params:
+        - user_id: User identifier (default: "default")
+        - limit: Maximum number of sessions to return (default: 20)
+    """
+    if not handler or not handler.dialogue or not handler.dialogue.sqlite_store:
+        raise HTTPException(status_code=503, detail="Storage not available")
+
+    try:
+        sessions = handler.dialogue.sqlite_store.get_user_sessions(user_id, limit)
+        return JSONResponse(content={"sessions": sessions, "count": len(sessions)})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/conversations/{session_id}")
+async def get_conversation_details(session_id: str, user_id: str = "default"):
+    """
+    Get full conversation details for a specific session.
+    Returns all turns with timestamps, intents, and entities.
+    """
+    if not handler or not handler.dialogue or not handler.dialogue.sqlite_store:
+        raise HTTPException(status_code=503, detail="Storage not available")
+
+    try:
+        session_data = handler.dialogue.sqlite_store.get_session(session_id)
+
+        if not session_data:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        # Verify user owns this session
+        if session_data.get('user_id') != user_id:
+            raise HTTPException(status_code=403, detail="Access denied")
+
+        return JSONResponse(content={"session": session_data})
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/conversations/{session_id}")
+async def delete_conversation(session_id: str, user_id: str = "default"):
+    """
+    Delete a conversation session and all its turns.
+    """
+    if not handler or not handler.dialogue or not handler.dialogue.sqlite_store:
+        raise HTTPException(status_code=503, detail="Storage not available")
+
+    try:
+        # Verify session exists and user owns it
+        session_data = handler.dialogue.sqlite_store.get_session(session_id)
+
+        if not session_data:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        if session_data.get('user_id') != user_id:
+            raise HTTPException(status_code=403, detail="Access denied")
+
+        # Delete the session
+        handler.dialogue.sqlite_store.delete_session(session_id)
+
+        return JSONResponse(content={
+            "success": True,
+            "message": f"Session {session_id} deleted successfully"
+        })
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/conversations/search")
+async def search_conversations(
+    query: str,
+    user_id: str = "default",
+    limit: int = 10
+):
+    """
+    Search through conversation history for specific terms.
+    Query params:
+        - query: Search term
+        - user_id: User identifier
+        - limit: Maximum number of results
+    """
+    if not handler or not handler.dialogue or not handler.dialogue.sqlite_store:
+        raise HTTPException(status_code=503, detail="Storage not available")
+
+    if not query:
+        raise HTTPException(status_code=400, detail="Query parameter is required")
+
+    try:
+        # Get user's sessions
+        sessions = handler.dialogue.sqlite_store.get_user_sessions(user_id, limit=100)
+
+        # Search through turns for matching content
+        results = []
+        for session in sessions:
+            session_data = handler.dialogue.sqlite_store.get_session(session['session_id'])
+            if session_data and 'turns' in session_data:
+                for turn in session_data['turns']:
+                    # Case-insensitive search in user input and assistant response
+                    if (query.lower() in turn['user_input'].lower() or
+                        query.lower() in turn['assistant_response'].lower()):
+                        results.append({
+                            "session_id": session['session_id'],
+                            "turn_id": turn['turn_id'],
+                            "user_input": turn['user_input'],
+                            "assistant_response": turn['assistant_response'],
+                            "timestamp": turn['timestamp'],
+                            "intent": turn.get('intent')
+                        })
+
+                        if len(results) >= limit:
+                            break
+
+            if len(results) >= limit:
+                break
+
+        return JSONResponse(content={
+            "results": results,
+            "count": len(results),
+            "query": query
+        })
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/conversations/export/{session_id}")
+async def export_conversation(session_id: str, user_id: str = "default", format: str = "json"):
+    """
+    Export a conversation session to JSON or text format.
+    Query params:
+        - format: "json" or "text" (default: "json")
+    """
+    if not handler or not handler.dialogue or not handler.dialogue.sqlite_store:
+        raise HTTPException(status_code=503, detail="Storage not available")
+
+    try:
+        session_data = handler.dialogue.sqlite_store.get_session(session_id)
+
+        if not session_data:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        if session_data.get('user_id') != user_id:
+            raise HTTPException(status_code=403, detail="Access denied")
+
+        if format == "text":
+            # Generate text format
+            text_export = f"Conversation Export - Session: {session_id}\n"
+            text_export += f"Created: {session_data.get('created_at', 'Unknown')}\n"
+            text_export += f"Last Updated: {session_data.get('last_updated', 'Unknown')}\n"
+            text_export += "="*80 + "\n\n"
+
+            for turn in session_data.get('turns', []):
+                text_export += f"[{turn.get('timestamp', '')}]\n"
+                text_export += f"User: {turn['user_input']}\n"
+                text_export += f"Assistant: {turn['assistant_response']}\n"
+                if turn.get('intent'):
+                    text_export += f"Intent: {turn['intent']} (confidence: {turn.get('intent_confidence', 0):.2f})\n"
+                text_export += "\n" + "-"*80 + "\n\n"
+
+            return JSONResponse(content={
+                "format": "text",
+                "content": text_export
+            })
+        else:
+            # Return JSON format
+            return JSONResponse(content={
+                "format": "json",
+                "session": session_data
+            })
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
