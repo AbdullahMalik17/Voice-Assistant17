@@ -343,7 +343,17 @@ class VoiceAssistantHandler:
                             if tool_result.get('success'):
                                 # Format the tool result as the response
                                 tool_data = tool_result.get('data', {})
-                                response_text = self._format_tool_response(tool_data, text)
+                                
+                                # Generate natural language response using LLM
+                                if self.llm:
+                                    response_text = await asyncio.to_thread(
+                                        self.llm.generate_summarized_response,
+                                        query=text,
+                                        tool_name=last_result['message'], # Contains the tool/step description
+                                        tool_result=tool_data
+                                    )
+                                else:
+                                    response_text = self._format_tool_response(tool_data, text)
 
                                 result = {
                                     "text": response_text,
@@ -379,6 +389,25 @@ class VoiceAssistantHandler:
                                         logger.warning(f"TTS generation failed: {e}")
 
                                 return result
+                            else:
+                                # Handle failure with LLM if possible
+                                error_msg = tool_result.get('error', 'Unknown error')
+                                if self.llm:
+                                    response_text = await asyncio.to_thread(
+                                        self.llm.generate_summarized_response,
+                                        query=text,
+                                        tool_name=last_result['message'],
+                                        tool_result={"error": error_msg}
+                                    )
+                                else:
+                                    response_text = f"I encountered an error while trying to help you: {error_msg}"
+                                
+                                return {
+                                    "text": response_text,
+                                    "intent": "error",
+                                    "confidence": 0.0,
+                                    "error": error_msg
+                                }
                 except Exception as e:
                     logger.warning(f"Agent tool execution failed: {e}")
                     # Fall back to regular processing if agent fails

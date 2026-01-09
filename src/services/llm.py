@@ -349,6 +349,43 @@ class LLMService:
             )
             return f"I'll {action_description}."
 
+    def generate_summarized_response(
+        self,
+        query: str,
+        tool_name: str,
+        tool_result: Any,
+        context: Optional[ConversationContext] = None
+    ) -> str:
+        """
+        Generate a natural language summary of a tool execution result.
+        """
+        prompt = f"""You are a helpful voice assistant. 
+The user asked: "{query}"
+You executed the tool "{tool_name}" and got this result: {str(tool_result)}
+
+Based on this result, provide a helpful, natural, and detailed response to the user.
+If the tool was successful, explain what was done or provide the information requested.
+If there was an error, explain it politely.
+Do not just repeat the raw data; speak like a human.
+"""
+        try:
+            if self.mode in ["api", "hybrid"] and self.gemini_client:
+                # Use simplified API call for summary
+                response = self.gemini_client.models.generate_content(
+                    model=self.config.llm.api_model,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        temperature=0.7,
+                        max_output_tokens=self.config.llm.max_tokens,
+                    )
+                )
+                return response.text.strip() if response.text else "I've completed the action."
+            else:
+                return self._generate_local(prompt)
+        except Exception as e:
+            self.logger.error(event='SUMMARY_GENERATION_FAILED', message=str(e))
+            return f"I've executed the {tool_name} tool. The result is: {str(tool_result)}"
+
     def test_service(self) -> bool:
         """Test LLM service with a simple query"""
         try:
