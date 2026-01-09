@@ -50,7 +50,9 @@
       "Bash(del nul)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "Bash(npm run build:*)",
+      "Bash(git push)"
     ]
   }
 }
