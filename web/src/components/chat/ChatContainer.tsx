@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback } from 'react';
+import { useSession } from 'next-auth/react';
 import { useWebSocket } from '@/hooks/useWebSocket';
 import { Message, WebSocketMessage } from '@/types';
 import { MessageList } from './MessageList';
@@ -10,11 +11,13 @@ import { Wifi, WifiOff, Loader2, Settings, Zap, History } from 'lucide-react';
 import { generateId } from '@/lib/utils';
 import { ThemeToggle } from '../ui/ThemeToggle';
 import { ConversationSidebar } from './ConversationSidebar';
+import { UserMenu } from '../auth/UserMenu';
 
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000/ws/voice';
 console.log('WS_URL:', WS_URL);
 
 export function ChatContainer() {
+  const { data: session } = useSession();
   const [messages, setMessages] = useState<Message[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -181,7 +184,7 @@ export function ChatContainer() {
     <div className="flex h-screen max-w-full relative">
       {/* Conversation Sidebar */}
       <ConversationSidebar
-        userId="default"
+        userId={session?.user?.id || 'default'}
         onSelectConversation={(sessionId) => {
           console.log('Selected conversation:', sessionId);
           // TODO: Load conversation history into messages
@@ -253,6 +256,9 @@ export function ChatContainer() {
             >
               <Settings className="w-5 h-5 text-gray-600 dark:text-gray-300 group-hover:text-neon-blue transition-colors duration-300 group-hover:rotate-90 transform" />
             </button>
+
+            {/* User Menu with logout */}
+            <UserMenu />
           </div>
         </div>
       </header>

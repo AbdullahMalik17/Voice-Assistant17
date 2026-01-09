@@ -3,7 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { Message } from '@/types';
 import { MessageBubble } from './MessageBubble';
-import { Loader2 } from 'lucide-react';
+import { TypingIndicator } from './TypingIndicator';
 
 interface MessageListProps {
   messages: Message[];
@@ -37,24 +37,7 @@ export function MessageList({ messages, isProcessing }: MessageListProps) {
       )}
 
       {/* Processing indicator */}
-      {isProcessing && (
-        <div className="flex items-center gap-2 text-gray-400">
-          <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
-            <Loader2 className="w-4 h-4 animate-spin" />
-          </div>
-          <div className="flex gap-1">
-            <span className="w-2 h-2 bg-gray-300 rounded-full animate-bounce" />
-            <span
-              className="w-2 h-2 bg-gray-300 rounded-full animate-bounce"
-              style={{ animationDelay: '0.1s' }}
-            />
-            <span
-              className="w-2 h-2 bg-gray-300 rounded-full animate-bounce"
-              style={{ animationDelay: '0.2s' }}
-            />
-          </div>
-        </div>
-      )}
+      {isProcessing && <TypingIndicator />}
 
       <div ref={bottomRef} />
     </div>
