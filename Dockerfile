@@ -1,8 +1,9 @@
-FROM python:3.10-slim
+FROM mcr.microsoft.com/playwright/python:v1.51.0-jammy
 
 WORKDIR /app
 
-# Install system dependencies
+# Install system dependencies for Audio (PortAudio, FFmpeg)
+# The base image already has browser dependencies
 RUN apt-get update && apt-get install -y \
     portaudio19-dev \
     ffmpeg \
@@ -13,8 +14,7 @@ RUN apt-get update && apt-get install -y \
 # Install Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-RUN pip install uvicorn gunicorn playwright
-RUN playwright install --with-deps chromium
+RUN pip install uvicorn gunicorn
 
 # Copy application code
 COPY src/ ./src/
