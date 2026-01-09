@@ -37,6 +37,7 @@ except ImportError as e:
 try:
     from src.memory.semantic_memory import SemanticMemory
     from src.memory.dialogue_state import DialogueStateManager
+    from src.storage.sqlite_store import SqliteStore
     MEMORY_AVAILABLE = True
 except ImportError as e:
     logger.warning(f"Memory services not available: {e}")
@@ -252,8 +253,12 @@ class VoiceAssistantHandler:
                 from src.memory.semantic_memory import MemoryConfig
                 memory_config = MemoryConfig()
                 self.memory = SemanticMemory(memory_config)
-                self.dialogue = DialogueStateManager(self.memory)
-                logger.info("Semantic memory services initialized")
+                
+                # Initialize SQLite store for session persistence
+                self.sqlite_store = SqliteStore()
+                
+                self.dialogue = DialogueStateManager(self.memory, sqlite_store=self.sqlite_store)
+                logger.info("Semantic and persistent session memory services initialized")
             except Exception as e:
                 logger.warning(f"Semantic memory services not available: {e}")
 

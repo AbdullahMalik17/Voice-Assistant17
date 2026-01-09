@@ -11,6 +11,7 @@ from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
 from .semantic_memory import SemanticMemory, MemoryConfig, RetrievedMemory
+from ..storage.sqlite_store import SqliteStore
 
 
 class ConversationState(str, Enum):
@@ -258,6 +259,7 @@ class DialogueStateManager:
     def __init__(
         self,
         semantic_memory: Optional[SemanticMemory] = None,
+        sqlite_store: Optional[SqliteStore] = None,
         timeout_seconds: int = 300,
         max_sessions: int = 100
     ):
@@ -269,6 +271,9 @@ class DialogueStateManager:
 
         # Semantic memory for RAG
         self.semantic_memory = semantic_memory or SemanticMemory()
+        
+        # SQLite store for persistence
+        self.sqlite_store = sqlite_store
 
     def create_session(
         self,
@@ -286,6 +291,14 @@ class DialogueStateManager:
         )
 
         self._sessions[session_id] = state
+        
+        # Persist if SQLite store is available
+        if self.sqlite_store:
+            self.sqlite_store.save_session(
+                session_id=session_id,
+                user_id=user_id,
+                state=state.state.value
+            )
 
         # Cleanup old sessions if too many
         if len(self._sessions) > self.max_sessions:
@@ -294,8 +307,37 @@ class DialogueStateManager:
         return state
 
     def get_session(self, session_id: str) -> Optional[DialogueState]:
-        """Get an existing session by ID"""
+        """Get an existing session by ID, trying memory then SQLite"""
         state = self._sessions.get(session_id)
+
+        # If not in memory, try loading from SQLite
+        if state is None and self.sqlite_store:
+            session_data = self.sqlite_store.get_session(session_id)
+            if session_data:
+                # Reconstruct state
+                state = DialogueState(
+                    session_id=session_id,
+                    user_id=session_data['user_id'],
+                    state=ConversationState(session_data['state']),
+                    current_intent=session_data['current_intent'],
+                    timeout_seconds=self.timeout_seconds
+                )
+                # Reconstruct turns
+                for turn_data in session_data.get('turns', []):
+                    # Convert dict from DB to Turn object
+                    turn = Turn(
+                        id=turn_data['turn_id'],
+                        user_input=turn_data['user_input'],
+                        assistant_response=turn_data['assistant_response'],
+                        timestamp=datetime.fromisoformat(turn_data['timestamp']),
+                        intent=turn_data['intent'],
+                        intent_confidence=turn_data['intent_confidence'],
+                        entities=turn_data['entities']
+                    )
+                    state.turns.append(turn)
+                
+                # Cache in memory
+                self._sessions[session_id] = state
 
         if state and state.is_expired():
             state.state = ConversationState.EXPIRED
@@ -311,7 +353,7 @@ class DialogueStateManager:
         """Get existing session or create new one"""
         state = self.get_session(session_id)
 
-        if state is None or state.is_expired():
+        if state is None:
             state = self.create_session(session_id, user_id)
 
         return state
@@ -329,7 +371,7 @@ class DialogueStateManager:
         store_in_memory: bool = True
     ) -> Turn:
         """
-        Update a session with a new turn and optionally store in semantic memory.
+        Update a session with a new turn and optionally store in semantic memory and SQLite.
 
         Returns:
             The created Turn object
@@ -346,6 +388,26 @@ class DialogueStateManager:
             stt_confidence=stt_confidence,
             processing_time_ms=processing_time_ms
         )
+
+        # Persist to SQLite
+        if self.sqlite_store:
+            # Update session info
+            self.sqlite_store.save_session(
+                session_id=session_id,
+                user_id=state.user_id,
+                state=state.state.value,
+                current_intent=state.current_intent
+            )
+            # Add new turn
+            self.sqlite_store.add_turn(
+                turn_id=turn.id,
+                session_id=session_id,
+                user_input=user_input,
+                assistant_response=assistant_response,
+                intent=intent,
+                intent_confidence=intent_confidence,
+                entities=entities
+            )
 
         # Store in semantic memory for future retrieval
         if store_in_memory and self.semantic_memory:
