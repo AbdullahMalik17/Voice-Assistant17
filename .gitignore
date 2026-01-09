@@ -86,3 +86,9 @@ Thumbs.db
 # Playwright
 playwright-report/
 test-results/
+
+# Credentials and tokens (NEVER commit these!)
+config/google_credentials.json
+config/google_token.json
+*_credentials.json
+*_token.json
