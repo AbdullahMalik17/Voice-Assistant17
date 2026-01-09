@@ -42,7 +42,7 @@ export default function RegisterPage() {
 
       if (signUpError) {
         setError(signUpError.message);
-      } else if (data.user) {
+      } else if (data?.user) {
         setSuccess(true);
         // Redirect to login after 2 seconds
         setTimeout(() => {

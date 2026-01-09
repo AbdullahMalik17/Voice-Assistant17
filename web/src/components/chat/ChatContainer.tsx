@@ -186,7 +186,7 @@ export function ChatContainer() {
           console.log('Selected conversation:', sessionId);
           // TODO: Load conversation history into messages
         }}
-        currentSessionId={sessionId}
+        currentSessionId={sessionId ?? undefined}
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
       />
