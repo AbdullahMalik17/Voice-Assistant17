@@ -79,8 +79,6 @@ opentelemetry-sdk==1.29.0
 # System Control & Automation
 # ===========================
 psutil==5.9.7  # System status monitoring
-pycaw==20240210  # Advanced Audio Control
-pywin32==306     # Windows API access
 fuzzywuzzy==0.18.0 # Fuzzy string matching
 python-Levenshtein==0.23.0 # Speedup for fuzzywuzzy
 pyyaml==6.0.1  # YAML configuration
