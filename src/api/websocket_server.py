@@ -43,6 +43,14 @@ except ImportError as e:
     logger.warning(f"Memory services not available: {e}")
     MEMORY_AVAILABLE = False
 
+# Authentication imports
+try:
+    from src.auth import authenticate_websocket, get_user_id_from_auth, AuthenticationError
+    AUTH_AVAILABLE = True
+except ImportError as e:
+    logger.warning(f"Authentication not available: {e}")
+    AUTH_AVAILABLE = False
+
 try:
     from src.agents.planner import AgenticPlanner
     from src.agents.guardrails import SafetyGuardrails
@@ -677,16 +685,58 @@ app.add_middleware(
 
 @app.websocket("/ws/voice")
 async def websocket_voice_endpoint(websocket: WebSocket):
-    """WebSocket endpoint for real-time voice/text communication."""
+    """WebSocket endpoint for real-time voice/text communication with JWT authentication."""
     await websocket.accept()
-    session_id = session_manager.create_session(websocket)
+
+    # Authenticate user
+    user_info = None
+    user_id = "anonymous"
+
+    if AUTH_AVAILABLE:
+        try:
+            user_info = await authenticate_websocket(websocket)
+            user_id = get_user_id_from_auth(user_info)
+            logger.info(f"✅ Authenticated user: {user_info.get('email', 'unknown')} (ID: {user_id})")
+        except AuthenticationError as e:
+            logger.error(f"❌ Authentication failed: {e}")
+            await websocket.send_json({
+                "type": "error",
+                "content": {"error": str(e)},
+                "session_id": "none"
+            })
+            await websocket.close(code=1008, reason="Authentication failed")
+            return
+        except Exception as e:
+            logger.error(f"❌ Unexpected auth error: {e}")
+            # Allow connection but log error
+            user_id = "anonymous"
+
+    # Use user_id as session_id for authenticated users, or generate one for anonymous
+    session_id = user_id if user_id != "anonymous" else session_manager.create_session(websocket)
+
+    if user_id == "anonymous":
+        session_id = session_manager.create_session(websocket)
+    else:
+        # For authenticated users, use user_id as session_id
+        session_manager.sessions[session_id] = {
+            "websocket": websocket,
+            "messages": [],
+            "created_at": datetime.utcnow(),
+            "last_activity": datetime.utcnow(),
+            "user_info": user_info
+        }
 
     try:
-        # Send session info
+        # Send session info with user context
         await websocket.send_json(
             WebSocketMessage(
                 type=MessageType.SYSTEM,
-                content={"message": "Connected", "session_id": session_id},
+                content={
+                    "message": "Connected",
+                    "session_id": session_id,
+                    "user_id": user_id,
+                    "authenticated": user_info.get("authenticated", False) if user_info else False
+                },
                 session_id=session_id
             ).to_dict()
         )
