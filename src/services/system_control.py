@@ -8,9 +8,15 @@ import os
 import platform
 import subprocess
 import logging
-from typing import Dict, Any, List, Optional
+import shutil
+from typing import Dict, Any, List, Optional, Tuple
 from pathlib import Path
 import base64
+
+try:
+    from fuzzywuzzy import process
+except ImportError:
+    process = None
 
 logger = logging.getLogger(__name__)
 
@@ -413,6 +419,216 @@ class SystemControlService:
                 "success": False,
                 "error": str(e)
             }
+
+    def launch_app(self, app_name: str) -> Dict[str, Any]:
+        """
+        Launch an application by name.
+        Uses fuzzy matching to find the best match.
+        """
+        try:
+            if not process:
+                return {"success": False, "error": "fuzzywuzzy not installed"}
+
+            # 1. Simple direct execution check (e.g. "notepad")
+            if shutil.which(app_name):
+                subprocess.Popen(app_name, shell=True)
+                return {"success": True, "message": f"Launched {app_name}"}
+
+            # 2. Search in Start Menu (Windows)
+            if self.platform == "Windows":
+                app_path = self._find_windows_app(app_name)
+                if app_path:
+                    os.startfile(app_path)
+                    return {"success": True, "message": f"Launched {Path(app_path).stem}", "path": app_path}
+            
+            # 3. macOS/Linux implementation (simplified)
+            elif self.platform == "Darwin":
+                subprocess.run(["open", "-a", app_name])
+                return {"success": True, "message": f"Launched {app_name}"}
+            elif self.platform == "Linux":
+                 subprocess.Popen(app_name.split(), shell=True) # Basic linux fallback
+                 return {"success": True, "message": f"Launched {app_name}"}
+
+            return {"success": False, "error": f"Application '{app_name}' not found"}
+        except Exception as e:
+            logger.error(f"Launch app failed: {e}")
+            return {"success": False, "error": str(e)}
+
+    def _find_windows_app(self, app_name: str) -> Optional[str]:
+        """Find Windows app path using fuzzy matching."""
+        try:
+            # Common start menu paths
+            paths = [
+                os.path.join(os.environ.get("ProgramData", "C:\\ProgramData"), "Microsoft", "Windows", "Start Menu", "Programs"),
+                os.path.join(os.environ.get("APPDATA", "C:\\Users\\Default\\AppData\\Roaming"), "Microsoft", "Windows", "Start Menu", "Programs")
+            ]
+            
+            apps = {}
+            for path in paths:
+                if not os.path.exists(path):
+                    continue
+                for root, dirs, files in os.walk(path):
+                    for file in files:
+                        if file.endswith(".lnk"):
+                            name = file[:-4].lower()
+                            full_path = os.path.join(root, file)
+                            apps[name] = full_path
+            
+            # Fuzzy match
+            if not apps:
+                return None
+
+            match = process.extractOne(app_name.lower(), list(apps.keys()))
+            if match and match[1] > 70: # Threshold
+                return apps[match[0]]
+            return None
+        except Exception as e:
+            logger.error(f"App search error: {e}")
+            return None
+
+    def perform_file_operation(self, operation: str, source: str, destination: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Perform file operations (copy, move, delete).
+        """
+        try:
+            src_path = Path(source)
+            if not src_path.exists():
+                return {"success": False, "error": f"Source not found: {source}"}
+
+            if operation == "delete":
+                if src_path.is_dir():
+                    shutil.rmtree(src_path)
+                else:
+                    src_path.unlink()
+                return {"success": True, "message": f"Deleted {source}"}
+
+            if not destination:
+                return {"success": False, "error": "Destination required for copy/move"}
+
+            dest_path = Path(destination)
+            # Ensure parent exists
+            dest_path.parent.mkdir(parents=True, exist_ok=True)
+
+            if operation == "copy":
+                if src_path.is_dir():
+                    shutil.copytree(src_path, dest_path, dirs_exist_ok=True)
+                else:
+                    shutil.copy2(src_path, dest_path)
+                return {"success": True, "message": f"Copied {source} to {destination}"}
+
+            elif operation == "move":
+                shutil.move(str(src_path), str(dest_path))
+                return {"success": True, "message": f"Moved {source} to {destination}"}
+
+            return {"success": False, "error": f"Unknown operation: {operation}"}
+        except Exception as e:
+            logger.error(f"File operation failed: {e}")
+            return {"success": False, "error": str(e)}
+
+    def control_app_volume(self, app_name: str, level: int) -> Dict[str, Any]:
+        """Control volume for a specific application (Windows only)."""
+        if self.platform != "Windows":
+             return {"success": False, "error": "App volume control only supported on Windows"}
+        
+        try:
+            # Lazy import
+            from pycaw.pycaw import AudioUtilities, ISimpleAudioVolume
+            
+            sessions = AudioUtilities.GetAllSessions()
+            target_found = False
+            
+            for session in sessions:
+                volume = session._ctl.QueryInterface(ISimpleAudioVolume)
+                if session.Process and session.Process.name():
+                    proc_name = session.Process.name().lower()
+                    # Fuzzy match process name
+                    if app_name.lower() in proc_name:
+                         volume.SetMasterVolume(level / 100.0, None)
+                         target_found = True
+                    elif process:
+                         match = process.extractOne(app_name.lower(), [proc_name])
+                         if match and match[1] > 80:
+                             volume.SetMasterVolume(level / 100.0, None)
+                             target_found = True
+            
+            if target_found:
+                 return {"success": True, "message": f"Set volume for {app_name} to {level}%"}
+            else:
+                 return {"success": False, "error": f"Application {app_name} not found in audio mixer (it must be playing audio)"}
+                 
+        except Exception as e:
+            logger.error(f"App volume control failed: {e}")
+            return {"success": False, "error": str(e)}
+
+    def control_window(self, action: str, title_pattern: str = None) -> Dict[str, Any]:
+        """
+        Control application windows (minimize, maximize, close, focus).
+        """
+        if self.platform != "Windows":
+             return {"success": False, "error": "Window control only supported on Windows currently"}
+
+        try:
+            import pygetwindow as gw
+            
+            target_window = None
+            if title_pattern:
+                # Find window
+                windows = gw.getWindowsWithTitle(title_pattern)
+                if not windows:
+                     return {"success": False, "error": f"Window '{title_pattern}' not found"}
+                target_window = windows[0]
+            else:
+                target_window = gw.getActiveWindow()
+                
+            if not target_window:
+                 return {"success": False, "error": "No target window found"}
+
+            if action == "minimize":
+                target_window.minimize()
+            elif action == "maximize":
+                target_window.maximize()
+            elif action == "restore":
+                target_window.restore()
+            elif action == "close":
+                target_window.close()
+            elif action == "focus":
+                target_window.activate()
+            else:
+                return {"success": False, "error": f"Unknown action: {action}"}
+                
+            return {"success": True, "message": f"Performed {action} on {target_window.title}"}
+
+        except Exception as e:
+            logger.error(f"Window control failed: {e}")
+            return {"success": False, "error": str(e)}
+
+    def kill_process(self, name_or_pid: str) -> Dict[str, Any]:
+        """Kill a process by name or PID."""
+        try:
+            import psutil
+            killed_count = 0
+            
+            # Check if PID
+            if name_or_pid.isdigit():
+                pid = int(name_or_pid)
+                if psutil.pid_exists(pid):
+                    psutil.Process(pid).terminate()
+                    return {"success": True, "message": f"Terminated process PID {pid}"}
+            
+            # Kill by name (fuzzy or exact)
+            for proc in psutil.process_iter(['pid', 'name']):
+                if proc.info['name'] and name_or_pid.lower() in proc.info['name'].lower():
+                    proc.terminate()
+                    killed_count += 1
+            
+            if killed_count > 0:
+                return {"success": True, "message": f"Terminated {killed_count} processes matching '{name_or_pid}'"}
+            else:
+                return {"success": False, "error": f"No process found matching '{name_or_pid}'"}
+                
+        except Exception as e:
+            logger.error(f"Kill process failed: {e}")
+            return {"success": False, "error": str(e)}
 
 
 # Singleton instance

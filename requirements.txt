@@ -86,6 +86,10 @@ python-Levenshtein==0.23.0 # Speedup for fuzzywuzzy
 pyyaml==6.0.1  # YAML configuration
 requests==2.31.0  # HTTP requests
 python-dateutil>=2.8.2  # Date parsing for entity extraction
+pyautogui>=0.9.54  # GUI automation
+pycaw>=20240210  # Windows Core Audio API
+comtypes>=1.4.1  # For pycaw
+pywin32>=306; sys_platform == 'win32'  # Windows API access
 
 # ===========================
 # Testing

@@ -47,7 +47,7 @@ class FindFileTool(Tool):
                 return ToolResult(
                     success=True,
                     data={
-                        "message": f"Found {result['count']} files matching '{filename}'",
+                        "message": f"Found {result['count']} files matching '{filename}'",    
                         "results": result["results"],
                         "count": result["count"]
                     }
@@ -333,3 +333,139 @@ class OpenFileLocationTool(Tool):
                 success=False,
                 error=f"Open location error: {str(e)}"
             )
+
+
+class LaunchAppTool(Tool):
+    """Launch an application"""
+    name = "launch_app"
+    description = "Launch a desktop application by name"
+    category = ToolCategory.SYSTEM
+    requires_confirmation = False
+
+    def _setup_parameters(self) -> None:
+        self._parameters = [
+            ToolParameter(
+                name="app_name",
+                type="string",
+                description="Name of the application to launch",
+                required=True
+            )
+        ]
+        self._examples = [
+            "Open Chrome",
+            "Launch Notepad",
+            "Start Spotify"
+        ]
+
+    def execute(self, app_name: str, **params) -> ToolResult:
+        """Launch app"""
+        try:
+            system = get_system_control()
+            result = system.launch_app(app_name)
+
+            if result["success"]:
+                return ToolResult(
+                    success=True,
+                    data=result
+                )
+            else:
+                return ToolResult(
+                    success=False,
+                    error=result.get("error", "Failed to launch app")
+                )
+        except Exception as e:
+            return ToolResult(
+                success=False,
+                error=f"Launch app error: {str(e)}"
+            )
+
+
+class FileOperationTool(Tool):
+    """Perform file operations"""
+    name = "file_operation"
+    description = "Copy, move, or delete files/folders"
+    category = ToolCategory.SYSTEM
+    requires_confirmation = True
+
+    def _setup_parameters(self) -> None:
+        self._parameters = [
+            ToolParameter(
+                name="operation",
+                type="string",
+                description="Operation to perform",
+                required=True,
+                enum=["copy", "move", "delete"]
+            ),
+            ToolParameter(
+                name="source",
+                type="string",
+                description="Source path",
+                required=True
+            ),
+            ToolParameter(
+                name="destination",
+                type="string",
+                description="Destination path (required for copy/move)",
+                required=False
+            )
+        ]
+        self._examples = [
+            "Delete file report.txt",
+            "Copy folder Data to Backup",
+            "Move image.png to Pictures"
+        ]
+
+    def execute(self, operation: str, source: str, destination: str = None, **params) -> ToolResult:
+        """Execute file operation"""
+        try:
+            system = get_system_control()
+            result = system.perform_file_operation(operation, source, destination)
+
+            if result["success"]:
+                return ToolResult(
+                    success=True,
+                    data=result
+                )
+            else:
+                return ToolResult(
+                    success=False,
+                    error=result.get("error", "File operation failed")
+                )
+        except Exception as e:
+            return ToolResult(
+                success=False,
+                error=f"File operation error: {str(e)}"
+            )
+
+class KillProcessTool(Tool):
+    """Terminate a running process"""
+    name = "kill_process"
+    description = "Terminate a running process by name or PID"
+    category = ToolCategory.SYSTEM
+    requires_confirmation = True
+
+    def _setup_parameters(self) -> None:
+        self._parameters = [
+            ToolParameter(
+                name="process_identifier",
+                type="string",
+                description="Process name (e.g., 'chrome') or PID",
+                required=True
+            )
+        ]
+        self._examples = [
+            "Kill Chrome",
+            "Stop process 1234",
+            "End task python"
+        ]
+
+    def execute(self, process_identifier: str, **params) -> ToolResult:
+        try:
+            system = get_system_control()
+            result = system.kill_process(process_identifier)
+            if result["success"]:
+                 return ToolResult(success=True, data=result)
+            else:
+                 return ToolResult(success=False, error=result.get("error", "Failed to kill process"))
+        except Exception as e:
+             return ToolResult(success=False, error=str(e))

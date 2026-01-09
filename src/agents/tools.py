@@ -330,116 +330,6 @@ class SystemStatusTool(Tool):
         return ToolResult(success=True, data=data)
 
 
-class LaunchAppTool(Tool):
-    """Launch an application"""
-    name = "launch_app"
-    description = "Open an application on the user's computer"
-    category = ToolCategory.SYSTEM
-    requires_confirmation = False
-
-    def _setup_parameters(self) -> None:
-        self._parameters = [
-            ToolParameter(
-                name="app_name",
-                type="string",
-                description="Name of the application to launch",
-                required=True
-            )
-        ]
-        self._examples = [
-            "Open Spotify",
-            "Launch Chrome",
-            "Start Word",
-            "Open Instagram",
-            "Launch Photos",
-            "Start Calculator"
-        ]
-
-    def execute(self, app_name: str, **params) -> ToolResult:
-        import platform
-        import subprocess
-
-        system = platform.system()
-        app_lower = app_name.lower()
-
-        # Map common app names to commands
-        app_commands = {
-            "windows": {
-                "spotify": "start spotify:",
-                "chrome": "start chrome",
-                "firefox": "start firefox",
-                "edge": "start msedge",
-                "word": "start winword",
-                "excel": "start excel",
-                "notepad": "notepad.exe",
-                "calculator": "calc.exe",
-                "terminal": "wt.exe",
-                "explorer": "explorer.exe",
-                "instagram": "start ms-instagram:",  # Instagram app
-                "store": "start ms-windows-store:",  # Microsoft Store
-                "photos": "start ms-photos:",  # Photos app
-                "mail": "start outlookmail:",  # Mail app
-                "calendar": "start outlookcal:",  # Calendar app
-                "settings": "start ms-settings:",  # Settings app
-            },
-            "darwin": {
-                "spotify": "open -a Spotify",
-                "chrome": "open -a 'Google Chrome'",
-                "firefox": "open -a Firefox",
-                "safari": "open -a Safari",
-                "word": "open -a 'Microsoft Word'",
-                "terminal": "open -a Terminal",
-                "finder": "open -a Finder",
-                "instagram": "open -a 'Instagram'",  # Instagram app
-            },
-            "linux": {
-                "spotify": "spotify",
-                "chrome": "google-chrome",
-                "firefox": "firefox",
-                "terminal": "gnome-terminal",
-                "files": "nautilus",
-                "instagram": "instagram",  # If installed via snap or package manager
-            }
-        }
-
-        system_key = system.lower()
-        if system_key == "windows":
-            system_key = "windows"
-        elif system_key == "darwin":
-            system_key = "darwin"
-        else:
-            system_key = "linux"
-
-        # Get command for the app
-        commands = app_commands.get(system_key, {})
-        cmd = commands.get(app_lower)
-
-        if not cmd:
-            # Try generic launch
-            if system == "Windows":
-                cmd = f"start {app_name}"
-            elif system == "Darwin":
-                cmd = f"open -a '{app_name}'"
-            else:
-                cmd = app_name
-
-        try:
-            if system == "Windows":
-                subprocess.Popen(cmd, shell=True)
-            else:
-                subprocess.Popen(cmd, shell=True, start_new_session=True)
-
-            return ToolResult(
-                success=True,
-                data={"message": f"Launched {app_name}"}
-            )
-        except Exception as e:
-            return ToolResult(
-                success=False,
-                error=f"Failed to launch {app_name}: {str(e)}"
-            )
-
-
 class SetTimerTool(Tool):
     """Set a countdown timer"""
     name = "set_timer"
@@ -590,7 +480,6 @@ def create_default_registry(sqlite_store=None) -> ToolRegistry:
 
     # Register built-in tools
     registry.register(SystemStatusTool())
-    registry.register(LaunchAppTool())
     registry.register(SetTimerTool())
     registry.register(WebSearchTool())
     registry.register(GetWeatherTool())
@@ -627,7 +516,10 @@ def create_default_registry(sqlite_store=None) -> ToolRegistry:
             MinimizeWindowsTool,
             ListProcessesTool,
             CreateFolderTool,
-            OpenFileLocationTool
+            OpenFileLocationTool,
+            LaunchAppTool,
+            FileOperationTool,
+            KillProcessTool
         )
 
         registry.register(FindFileTool())
@@ -637,6 +529,9 @@ def create_default_registry(sqlite_store=None) -> ToolRegistry:
         registry.register(ListProcessesTool())
         registry.register(CreateFolderTool())
         registry.register(OpenFileLocationTool())
+        registry.register(LaunchAppTool())
+        registry.register(FileOperationTool())
+        registry.register(KillProcessTool())
     except ImportError as e:
         # System tools optional
         pass
@@ -672,12 +567,16 @@ def create_default_registry(sqlite_store=None) -> ToolRegistry:
             VolumeControlTool,
             MediaControlTool,
             BrightnessControlTool,
-            PowerControlTool
+            PowerControlTool,
+            AppVolumeControlTool,
+            WindowControlTool
         )
         registry.register(VolumeControlTool())
         registry.register(MediaControlTool())
         registry.register(BrightnessControlTool())
         registry.register(PowerControlTool())
+        registry.register(AppVolumeControlTool())
+        registry.register(WindowControlTool())
     except ImportError:
         pass
 

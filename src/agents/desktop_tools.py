@@ -9,6 +9,7 @@ import subprocess
 from typing import Optional, List, Any
 
 from .tools import Tool, ToolResult, ToolCategory, ToolParameter
+from ..services.system_control import get_system_control
 
 
 class PowerShellTool(Tool):
@@ -92,12 +93,12 @@ class VolumeControlTool(PowerShellTool):
             
         elif action == "up":
             # 0xAF is VK_VOLUME_UP (press 5 times for noticeable change)
-            script = "$w = New-Object -ComObject WScript.Shell; for($i=0;$i-lt 5;$i++){$w.SendKeys([char]0xAF)}"
+            script = "$w = New-Object -ComObject WScript.Shell; for($i=0;$i-lt 5;$i){$w.SendKeys([char]0xAF)}"
             return self._run_powershell(script)
             
         elif action == "down":
             # 0xAE is VK_VOLUME_DOWN
-            script = "$w = New-Object -ComObject WScript.Shell; for($i=0;$i-lt 5;$i++){$w.SendKeys([char]0xAE)}"
+            script = "$w = New-Object -ComObject WScript.Shell; for($i=0;$i-lt 5;$i){$w.SendKeys([char]0xAE)}"
             return self._run_powershell(script)
             
         elif action == "set":
@@ -232,3 +233,105 @@ class PowerControlTool(PowerShellTool):
             return self._run_powershell("rundll32.exe user32.dll,LockWorkStation")
             
         return ToolResult(success=False, error=f"Unknown action: {action}")
+
+class AppVolumeControlTool(Tool):
+    """Control volume for specific applications"""
+    name = "app_volume_control"
+    description = "Control volume for a specific application (Windows only)"
+    category = ToolCategory.SYSTEM
+    requires_confirmation = False
+
+    def _setup_parameters(self) -> None:
+        self._parameters = [
+            ToolParameter(
+                name="app_name",
+                type="string",
+                description="Name of the application",
+                required=True
+            ),
+            ToolParameter(
+                name="level",
+                type="number",
+                description="Volume level (0-100)",
+                required=True
+            )
+        ]
+        self._examples = [
+            "Set Spotify volume to 50",
+            "Mute Chrome (set to 0)",
+            "Turn down Discord to 20"
+        ]
+
+    def execute(self, app_name: str, level: int, **params) -> ToolResult:
+        """Control app volume"""
+        try:
+            system = get_system_control()
+            result = system.control_app_volume(app_name, level)
+
+            if result["success"]:
+                return ToolResult(
+                    success=True,
+                    data=result
+                )
+            else:
+                return ToolResult(
+                    success=False,
+                    error=result.get("error", "Failed to set app volume")
+                )
+        except Exception as e:
+            return ToolResult(
+                success=False,
+                error=f"App volume error: {str(e)}"
+            )
+
+class WindowControlTool(Tool):
+    """Control application windows"""
+    name = "window_control"
+    description = "Minimize, maximize, restore, close, or focus windows"
+    category = ToolCategory.SYSTEM
+    requires_confirmation = False
+
+    def _setup_parameters(self) -> None:
+        self._parameters = [
+            ToolParameter(
+                name="action",
+                type="string",
+                description="Window action",
+                required=True,
+                enum=["minimize", "maximize", "restore", "close", "focus"]
+            ),
+            ToolParameter(
+                name="window_title",
+                type="string",
+                description="Title or part of the title of the window (optional, defaults to active window)",
+                required=False
+            )
+        ]
+        self._examples = [
+            "Minimize Chrome",
+            "Maximize this window",
+            "Close Notepad",
+            "Focus Spotify"
+        ]
+
+    def execute(self, action: str, window_title: str = None, **params) -> ToolResult:
+        """Control window"""
+        try:
+            system = get_system_control()
+            result = system.control_window(action, window_title)
+
+            if result["success"]:
+                return ToolResult(
+                    success=True,
+                    data=result
+                )
+            else:
+                return ToolResult(
+                    success=False,
+                    error=result.get("error", "Failed to control window")
+                )
+        except Exception as e:
+            return ToolResult(
+                success=False,
+                error=f"Window control error: {str(e)}"
+            )
