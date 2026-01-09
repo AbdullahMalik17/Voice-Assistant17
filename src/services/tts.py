@@ -18,6 +18,12 @@ try:
 except ImportError:
     ELEVENLABS_AVAILABLE = False
 
+try:
+    from gtts import gTTS
+    GTTS_AVAILABLE = True
+except ImportError:
+    GTTS_AVAILABLE = False
+
 # Piper TTS import (local fallback)
 # Note: Piper requires additional setup - placeholder for now
 PIPER_AVAILABLE = False
@@ -156,15 +162,37 @@ class TTSService:
         if system == "Windows":
             return self._synthesize_windows(text)
             
+        if GTTS_AVAILABLE:
+            return self._synthesize_gtts(text)
+
         if not PIPER_AVAILABLE:
             # Fallback: Generate simple tone or use system TTS
             # For baseline, we'll use a placeholder
-            raise RuntimeError("Piper TTS not available (requires additional setup)")
+            raise RuntimeError("No local TTS available (Install gTTS or configure Piper)")
 
         # TODO: Implement Piper TTS integration
         # This requires downloading Piper models and voice files
         # See: https://github.com/rhasspy/piper
         raise NotImplementedError("Piper TTS not yet implemented")
+
+    def _synthesize_gtts(self, text: str) -> bytes:
+        """Synthesize using Google TTS (gTTS) - Free fallback"""
+        try:
+            # Create a BytesIO buffer
+            mp3_fp = BytesIO()
+            
+            # Generate speech
+            # lang='en' by default, can be parameterized if needed
+            tts = gTTS(text=text, lang='en', slow=False)
+            
+            # Write to buffer
+            tts.write_to_fp(mp3_fp)
+            
+            # Get bytes
+            return mp3_fp.getvalue()
+            
+        except Exception as e:
+            raise RuntimeError(f"gTTS failed: {str(e)}")
 
     def _synthesize_windows(self, text: str) -> bytes:
         """Synthesize using Windows PowerShell System.Speech"""

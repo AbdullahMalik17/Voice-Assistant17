@@ -47,6 +47,7 @@ ollama==0.1.6
 # Text-to-Speech (TTS)
 # ===========================
 elevenlabs>=1.0.0
+gTTS==2.5.1  # Free Google TTS fallback
 # Piper TTS (local fallback)
 # piper-tts==1.2.0
 

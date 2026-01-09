@@ -13,7 +13,8 @@ RUN apt-get update && apt-get install -y \
 # Install Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-RUN pip install uvicorn gunicorn
+RUN pip install uvicorn gunicorn playwright
+RUN playwright install --with-deps chromium
 
 # Copy application code
 COPY src/ ./src/
