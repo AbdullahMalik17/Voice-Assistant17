@@ -1,3 +1,13 @@
+---
+title: Voice Assistant
+emoji: 🎙️
+colorFrom: blue
+colorTo: indigo
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # Voice Assistant
 
 A privacy-first, cross-platform voice assistant with agentic AI capabilities including persistent memory, web interface, and intelligent planning with autonomous task execution.
