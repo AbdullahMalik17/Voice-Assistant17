@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { Zap, Mail, ArrowRight, ArrowLeft, CheckCircle } from 'lucide-react';
+import { supabase } from '@/lib/supabase/client';
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
@@ -14,17 +15,26 @@ export default function ForgotPasswordPage() {
     setStatus('loading');
     setErrorMessage('');
 
-    // Simulate API call
-    try {
-      // In a real app, you would call your API here
-      // await fetch('/api/auth/forgot-password', { ... })
-      
-      await new Promise(resolve => setTimeout(resolve, 1500)); // Mock delay
-      
-      setStatus('success');
-    } catch (err) {
+    if (!supabase) {
       setStatus('error');
-      setErrorMessage('An unexpected error occurred. Please try again.');
+      setErrorMessage('Authentication service not configured');
+      return;
+    }
+
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/auth/reset-password`,
+      });
+
+      if (error) {
+        setStatus('error');
+        setErrorMessage(error.message);
+      } else {
+        setStatus('success');
+      }
+    } catch (err: any) {
+      setStatus('error');
+      setErrorMessage(err?.message || 'An unexpected error occurred. Please try again.');
     }
   };
 
