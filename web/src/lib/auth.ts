@@ -34,6 +34,10 @@ export const authOptions: NextAuthOptions = {
           password: credentials.password,
         });
 
+        if (error) {
+          console.error('Supabase auth error:', error);
+        }
+
         if (error || !data.user) {
           throw new Error(error?.message || 'Invalid credentials');
         }
