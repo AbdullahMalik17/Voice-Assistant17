@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { signUp } from '@/lib/supabase/client';
+import { signIn } from 'next-auth/react';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -42,15 +43,43 @@ export default function RegisterPage() {
 
       if (signUpError) {
         setError(signUpError.message);
-      } else if (data?.user) {
-        setSuccess(true);
-        // Redirect to login after 2 seconds
-        setTimeout(() => {
-          router.push('/auth/login');
-        }, 2000);
+        return;
       }
-    } catch (err) {
-      setError('An unexpected error occurred');
+
+      if (data?.user) {
+        // Check if email confirmation is required
+        const emailConfirmationRequired = data.user.identities && data.user.identities.length === 0;
+
+        if (emailConfirmationRequired) {
+          // Email confirmation required - show success and redirect to login
+          setSuccess(true);
+          setTimeout(() => {
+            router.push('/auth/login');
+          }, 2000);
+        } else {
+          // Try to automatically sign in the user after successful registration
+          const signInResult = await signIn('credentials', {
+            email,
+            password,
+            redirect: false,
+          });
+
+          if (signInResult?.error) {
+            // If auto-signin fails, show success message and redirect to login
+            setSuccess(true);
+            setTimeout(() => {
+              router.push('/auth/login');
+            }, 2000);
+          } else if (signInResult?.ok) {
+            // Auto-signin successful, redirect to home
+            router.push('/');
+            router.refresh();
+          }
+        }
+      }
+    } catch (err: any) {
+      console.error('Registration error:', err);
+      setError(err?.message || 'An unexpected error occurred');
     } finally {
       setLoading(false);
     }

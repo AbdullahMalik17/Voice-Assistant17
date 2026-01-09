@@ -24,6 +24,7 @@ ts-debug.log*
 
 # local env files
 .env*.local
+.env.production
 
 # vercel
 .vercel

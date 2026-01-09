@@ -7,7 +7,7 @@ import CredentialsProvider from 'next-auth/providers/credentials';
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -22,11 +22,11 @@ export const authOptions: NextAuthOptions = {
           throw new Error('Email and password required');
         }
 
-        if (!supabaseUrl || !supabaseServiceKey) {
+        if (!supabaseUrl || !supabaseAnonKey) {
           throw new Error('Supabase configuration missing');
         }
 
-        const supabase = createClient(supabaseUrl, supabaseServiceKey);
+        const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
         // Sign in with Supabase
         const { data, error } = await supabase.auth.signInWithPassword({
@@ -34,25 +34,45 @@ export const authOptions: NextAuthOptions = {
           password: credentials.password,
         });
 
-        if (error) {
-          console.error('Supabase auth error:', error);
-        }
-
         if (error || !data.user) {
-          throw new Error(error?.message || 'Invalid credentials');
+          console.error('Supabase auth error:', error);
+
+          // Provide more specific error messages
+          if (error?.message?.includes('Email not confirmed')) {
+            throw new Error('Email not confirmed. Please check your inbox and confirm your email address.');
+          } else if (error?.message?.includes('Invalid login credentials')) {
+            throw new Error('Invalid email or password');
+          } else {
+            throw new Error(error?.message || 'Invalid credentials');
+          }
         }
 
-        // Fetch user profile
-        const { data: profile } = await supabase
+        // Fetch user profile (with better error handling)
+        const { data: profile, error: profileError } = await supabase
           .from('user_profiles')
           .select('*')
           .eq('user_id', data.user.id)
           .single();
 
+        // If profile doesn't exist, create it
+        if (profileError && profileError.code === 'PGRST116') {
+          const displayName = data.user.user_metadata?.display_name ||
+                             data.user.email!.split('@')[0];
+
+          await supabase
+            .from('user_profiles')
+            .insert({
+              user_id: data.user.id,
+              display_name: displayName,
+            });
+        }
+
         return {
           id: data.user.id,
           email: data.user.email!,
-          name: profile?.display_name || data.user.email!.split('@')[0],
+          name: profile?.display_name ||
+                data.user.user_metadata?.display_name ||
+                data.user.email!.split('@')[0],
           image: profile?.avatar_url,
           accessToken: data.session?.access_token,
           refreshToken: data.session?.refresh_token,

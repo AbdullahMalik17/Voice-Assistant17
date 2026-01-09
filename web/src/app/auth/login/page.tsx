@@ -26,13 +26,21 @@ export default function LoginPage() {
       });
 
       if (result?.error) {
-        setError(result.error);
+        // Provide more helpful error messages
+        if (result.error.includes('Invalid') || result.error.includes('credentials')) {
+          setError('Invalid email or password. Please check your credentials and try again.');
+        } else if (result.error.includes('Email not confirmed')) {
+          setError('Please confirm your email address before logging in. Check your inbox for a confirmation link.');
+        } else {
+          setError(result.error);
+        }
       } else if (result?.ok) {
         router.push('/');
         router.refresh();
       }
-    } catch (err) {
-      setError('An unexpected error occurred');
+    } catch (err: any) {
+      console.error('Login error:', err);
+      setError(err?.message || 'An unexpected error occurred');
     } finally {
       setLoading(false);
     }
