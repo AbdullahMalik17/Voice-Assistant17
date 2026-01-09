@@ -61,6 +61,14 @@ class LLMService:
             message=f'Loaded {len(self.tool_registry._tools)} tools for function calling'
         )
 
+    def is_ready(self) -> bool:
+        """Check if the LLM service is ready to generate responses"""
+        if self.mode in ["api", "hybrid"]:
+            return self.gemini_client is not None
+        elif self.mode == "local":
+            return OLLAMA_AVAILABLE
+        return False
+
     def generate_response(
         self,
         query: str,

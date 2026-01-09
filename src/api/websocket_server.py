@@ -199,7 +199,10 @@ class VoiceAssistantHandler:
             # Initialize LLM service (required for text chat)
             try:
                 self.llm = LLMService(config, service_logger, metrics_logger)
-                logger.info("LLM service initialized")
+                if not self.llm.is_ready():
+                    logger.warning("LLM service initialized but NOT ready (check API key)")
+                else:
+                    logger.info("LLM service initialized and ready")
             except Exception as e:
                 logger.error(f"Failed to initialize LLM service: {e}")
 
@@ -723,12 +726,16 @@ async def websocket_voice_endpoint(websocket: WebSocket):
 @app.get("/health")
 async def health_check():
     """Health check endpoint for load balancers and monitoring."""
+    llm_ready = False
+    if handler and handler.llm:
+        llm_ready = handler.llm.is_ready()
+
     return {
         "status": "healthy",
         "version": "2.0.0",
         "services": {
             "stt": handler.stt is not None if handler else False,
-            "llm": handler.llm is not None if handler else False,
+            "llm": llm_ready,
             "tts": handler.tts is not None if handler else False,
             "memory": handler.memory is not None if handler else False,
             "agents": handler.planner is not None if handler else False
