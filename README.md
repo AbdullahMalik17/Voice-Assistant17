@@ -490,9 +490,8 @@ NEXT_PUBLIC_API_URL=https://your-backend-domain
 - Check connection strings and permissions
 
 For detailed deployment guides, see:
-- [Complete Deployment Guide](DEPLOYMENT_GUIDE.md)
-- [Production Deployment Guide](PRODUCTION_DEPLOYMENT_GUIDE.md)
-- [Web Deployment Guide](docs/WEB_DEPLOYMENT.md)
+- [Deployment Guide](START_HERE_DEPLOYMENT.md)
+- [Supabase Setup Guide](SUPABASE_SETUP_GUIDE.md)
 
 ## Architecture
 
@@ -562,9 +561,9 @@ voice-assistant/
 ├── src/
 │   ├── core/           # Configuration, context management
 │   ├── services/       # STT, LLM, TTS, intent, entity extraction
-│   ├── memory/         # Semantic memory, dialogue state (NEW)
-│   ├── agents/         # Planner, tools, guardrails (NEW)
-│   ├── observability/  # Metrics, tracing, health (NEW)
+│   ├── memory/         # Semantic memory, dialogue state
+│   ├── agents/         # Planner, tools, guardrails
+│   ├── observability/  # Metrics, tracing, health
 │   ├── models/         # Data models (Pydantic)
 │   ├── storage/        # Memory + encrypted persistence
 │   ├── api/            # FastAPI endpoints, WebSocket server
@@ -586,9 +585,13 @@ voice-assistant/
 ├── config/             # YAML config + .env template
 ├── specs/              # Feature specifications
 │   ├── 001-voice-assistant-baseline/
-│   └── 002-agentic-ai-improvements/  (NEW)
-├── history/            # Prompt history records
-└── .github/workflows/  # CI/CD pipelines (NEW)
+│   └── 002-agentic-ai-improvements/
+├── docs/               # Documentation
+├── scripts/            # Setup and utility scripts
+├── supabase/           # Database migrations
+├── models/             # Wake word models
+├── logs/               # Application logs
+└── docker/             # Docker configurations
 ```
 
 ## New Modules (v2.0)
@@ -784,9 +787,9 @@ GitHub Actions workflow includes:
 
 - [Quickstart Guide](specs/001-voice-assistant-baseline/quickstart.md)
 - [Baseline Specification](specs/001-voice-assistant-baseline/spec.md)
-- [Agentic AI Specification](specs/002-agentic-ai-improvements/spec.md) (NEW)
-- [Implementation Plan](specs/002-agentic-ai-improvements/plan.md) (NEW)
-- [Task Breakdown](specs/002-agentic-ai-improvements/tasks.md) (NEW)
+- [Agentic AI Specification](specs/002-agentic-ai-improvements/spec.md)
+- [Implementation Plan](specs/002-agentic-ai-improvements/plan.md)
+- [Task Breakdown](specs/002-agentic-ai-improvements/tasks.md)
 - [Persistent Memory](docs/persistent-memory.md)
 - [API Endpoints](docs/api-endpoints.md)
 - [Web Interface](docs/web-interface.md)
