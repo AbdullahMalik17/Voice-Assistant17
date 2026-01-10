@@ -31,7 +31,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
   return (
     <div
       className={cn(
-        'flex gap-2 sm:gap-3 max-w-[90%] sm:max-w-[85%] animate-slide-up',
+        'flex gap-2 sm:gap-3 max-w-[85%] sm:max-w-[80%] lg:max-w-[70%] animate-slide-up',
         isUser ? 'ml-auto flex-row-reverse' : 'mr-auto',
         isSystem && 'mx-auto max-w-full'
       )}

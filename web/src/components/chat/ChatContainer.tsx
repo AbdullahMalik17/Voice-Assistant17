@@ -181,7 +181,7 @@ export function ChatContainer() {
   };
 
   return (
-    <div className="flex min-h-screen max-w-full relative">
+    <div className="flex min-h-screen w-full relative">
       {/* Conversation Sidebar */}
       <ConversationSidebar
         userId={session?.user?.id || 'default'}
@@ -195,44 +195,44 @@ export function ChatContainer() {
       />
 
       {/* Main Chat Area */}
-      <div className="flex flex-col flex-1 min-h-screen max-w-6xl mx-auto relative">
+      <div className="flex flex-col flex-1 min-h-screen w-full relative">
         {/* Animated background grid (dark mode only) */}
         <div className="absolute inset-0 dark:cyber-grid-bg opacity-20 pointer-events-none" />
 
       {/* Header with glassmorphism */}
-      <header className="relative z-10 px-3 sm:px-6 py-3 sm:py-4 glass border-b dark:border-neon-blue/20 card-shadow animate-slide-down">
-        <div className="flex items-center justify-between">
+      <header className="relative z-10 px-3 sm:px-6 py-2.5 sm:py-4 glass border-b dark:border-neon-blue/20 card-shadow animate-slide-down">
+        <div className="flex items-center justify-between gap-2 sm:gap-4">
           {/* Logo and title */}
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 sm:gap-4 min-w-0">
             {/* Animated logo */}
-            <div className="relative w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-neon-blue via-neon-purple to-neon-pink p-[2px] animate-float">
+            <div className="relative w-9 h-9 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-neon-blue via-neon-purple to-neon-pink p-[2px] animate-float flex-shrink-0">
               <div className="w-full h-full rounded-xl bg-dark-bg dark:bg-black flex items-center justify-center">
-                <Zap className="w-6 h-6 text-neon-blue dark:drop-shadow-[0_0_10px_rgba(0,245,255,0.8)]" />
+                <Zap className="w-5 h-5 sm:w-6 sm:h-6 text-neon-blue dark:drop-shadow-[0_0_10px_rgba(0,245,255,0.8)]" />
               </div>
             </div>
 
-            <div>
-              <h1 className="text-lg sm:text-xl font-bold bg-gradient-to-r from-neon-blue via-neon-purple to-neon-pink bg-clip-text text-transparent font-[family-name:var(--font-orbitron)]">
+            <div className="min-w-0">
+              <h1 className="text-base sm:text-xl font-bold bg-gradient-to-r from-neon-blue via-neon-purple to-neon-pink bg-clip-text text-transparent font-[family-name:var(--font-orbitron)] truncate">
                 NEXUS AI
               </h1>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
+              <p className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 truncate">
                 Neural Voice Interface v2.0
               </p>
             </div>
           </div>
 
           {/* Status and controls */}
-          <div className="flex items-center gap-4">
-            {/* Connection status */}
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full glass">
+          <div className="flex items-center gap-1.5 sm:gap-3 flex-shrink-0">
+            {/* Connection status - compact on mobile */}
+            <div className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full glass">
               {status === 'connected' ? (
-                <Wifi className={`w-4 h-4 ${getStatusColor()} ${getStatusGlow()}`} />
+                <Wifi className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${getStatusColor()} ${getStatusGlow()}`} />
               ) : status === 'connecting' ? (
-                <Loader2 className={`w-4 h-4 ${getStatusColor()} ${getStatusGlow()} animate-spin`} />
+                <Loader2 className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${getStatusColor()} ${getStatusGlow()} animate-spin`} />
               ) : (
-                <WifiOff className={`w-4 h-4 ${getStatusColor()}`} />
+                <WifiOff className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${getStatusColor()}`} />
               )}
-              <span className={`text-xs font-medium uppercase tracking-wider ${getStatusColor()}`}>
+              <span className={`hidden sm:inline text-xs font-medium uppercase tracking-wider ${getStatusColor()}`}>
                 {status}
               </span>
             </div>
@@ -240,10 +240,10 @@ export function ChatContainer() {
             {/* History button */}
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="p-2 rounded-full glass hover:bg-white/10 dark:hover:bg-neon-blue/10 transition-all duration-300 btn-hover group"
+              className="p-1.5 sm:p-2 rounded-full glass hover:bg-white/10 dark:hover:bg-neon-blue/10 transition-all duration-300 btn-hover group"
               aria-label="Conversation History"
             >
-              <History className={`w-5 h-5 text-gray-600 dark:text-gray-300 group-hover:text-neon-blue transition-colors duration-300 ${sidebarOpen ? 'text-neon-blue' : ''}`} />
+              <History className={`w-4 h-4 sm:w-5 sm:h-5 text-gray-600 dark:text-gray-300 group-hover:text-neon-blue transition-colors duration-300 ${sidebarOpen ? 'text-neon-blue' : ''}`} />
             </button>
 
             {/* Theme toggle */}
@@ -251,10 +251,10 @@ export function ChatContainer() {
 
             {/* Settings button */}
             <button
-              className="p-2 rounded-full glass hover:bg-white/10 dark:hover:bg-neon-blue/10 transition-all duration-300 btn-hover group"
+              className="p-1.5 sm:p-2 rounded-full glass hover:bg-white/10 dark:hover:bg-neon-blue/10 transition-all duration-300 btn-hover group"
               aria-label="Settings"
             >
-              <Settings className="w-5 h-5 text-gray-600 dark:text-gray-300 group-hover:text-neon-blue transition-colors duration-300 group-hover:rotate-90 transform" />
+              <Settings className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 dark:text-gray-300 group-hover:text-neon-blue transition-colors duration-300 group-hover:rotate-90 transform" />
             </button>
 
             {/* User Menu with logout */}
@@ -268,7 +268,7 @@ export function ChatContainer() {
 
       {/* Input Area with glassmorphism */}
       <div className="relative z-10 glass border-t dark:border-neon-blue/20 card-shadow">
-        <div className="flex items-center gap-4 p-4">
+        <div className="flex items-end gap-2 sm:gap-4 p-3 sm:p-4">
           <ChatInput
             onSend={handleSendText}
             disabled={status !== 'connected' || isProcessing}
@@ -280,18 +280,18 @@ export function ChatContainer() {
         </div>
 
         {/* Keyboard hint */}
-        <div className="pb-3 text-center text-xs text-gray-400 dark:text-gray-500">
+        <div className="pb-2 sm:pb-3 px-3 sm:px-4 text-center text-xs text-gray-400 dark:text-gray-500">
           <div className="flex flex-col gap-1">
-            <span className="inline-flex items-center justify-center gap-1">
+            <span className="block text-[10px] sm:text-xs">
               🎤 Hold mic button or{' '}
-              <kbd className="px-2 py-1 bg-gray-100 dark:bg-dark-card border border-gray-300 dark:border-neon-blue/30 rounded text-gray-600 dark:text-neon-blue font-mono text-[10px]">
+              <kbd className="px-2 py-1 bg-gray-100 dark:bg-dark-card border border-gray-300 dark:border-neon-blue/30 rounded text-gray-600 dark:text-neon-blue font-mono text-[9px]">
                 Space
               </kbd>
-              {' '}for 5-10 seconds • Release when done
+              {' '}for 5-10 seconds
             </span>
-            <span className="inline-flex items-center justify-center gap-1 text-[10px]">
+            <span className="block text-[10px] sm:text-xs">
               Type message + press{' '}
-              <kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-dark-card border border-gray-300 dark:border-neon-blue/30 rounded text-gray-600 dark:text-neon-blue font-mono text-[9px]">
+              <kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-dark-card border border-gray-300 dark:border-neon-blue/30 rounded text-gray-600 dark:text-neon-blue font-mono text-[8px] sm:text-[9px]">
                 Enter
               </kbd>
             </span>

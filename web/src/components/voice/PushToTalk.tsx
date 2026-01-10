@@ -56,7 +56,7 @@ export function PushToTalk({ onAudioReady, disabled }: PushToTalkProps) {
   };
 
   return (
-    <div className="flex flex-col items-center gap-3">
+    <div className="flex flex-col items-center justify-center gap-0 sm:gap-2 flex-shrink-0">
       <button
         onMouseDown={startRecording}
         onMouseUp={stopRecording}
@@ -64,7 +64,7 @@ export function PushToTalk({ onAudioReady, disabled }: PushToTalkProps) {
         onTouchEnd={stopRecording}
         disabled={disabled}
         className={cn(
-          'relative flex items-center justify-center w-14 h-14 sm:w-16 sm:h-16 rounded-full',
+          'relative flex items-center justify-center w-12 h-12 sm:w-16 sm:h-16 rounded-full',
           'transition-all duration-300 ease-out',
           'focus:outline-none focus-visible:ring-4 focus-visible:ring-neon-blue/50',
           'btn-hover group',
@@ -82,9 +82,9 @@ export function PushToTalk({ onAudioReady, disabled }: PushToTalkProps) {
         aria-label={isRecording ? 'Recording... Release to send' : 'Hold to speak'}
       >
         {isRecording ? (
-          <Radio className="w-7 h-7 sm:w-8 sm:h-8 text-white animate-pulse" />
+          <Radio className="w-6 h-6 sm:w-8 sm:h-8 text-white animate-pulse" />
         ) : (
-          <Mic className="w-7 h-7 sm:w-8 sm:h-8 text-white group-hover:scale-110 transition-transform" />
+          <Mic className="w-6 h-6 sm:w-8 sm:h-8 text-white group-hover:scale-110 transition-transform" />
         )}
 
         {/* Animated pulse rings when recording */}
@@ -115,49 +115,49 @@ export function PushToTalk({ onAudioReady, disabled }: PushToTalkProps) {
         )}
       </button>
 
-      {/* Duration display with futuristic styling */}
+      {/* Duration display - compact on mobile */}
       {isRecording && (
-        <div className="flex flex-col items-center gap-1">
+        <div className="hidden sm:flex flex-col items-center gap-1">
           <div className="flex items-center gap-2 px-3 py-1 rounded-full glass border border-red-500/50 animate-pulse">
             <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-            <span className="text-sm text-red-500 dark:text-red-400 font-mono font-bold tracking-wider">
+            <span className="text-xs sm:text-sm text-red-500 dark:text-red-400 font-mono font-bold tracking-wider">
               {formatDuration(duration)}
             </span>
           </div>
           {duration < 5 && (
-            <span className="text-[9px] text-gray-400 dark:text-gray-500">
-              Keep holding... (5-10s ideal)
+            <span className="text-[8px] sm:text-[9px] text-gray-400 dark:text-gray-500 text-center">
+              Keep holding... (5-10s)
             </span>
           )}
           {duration >= 5 && duration < 10 && (
-            <span className="text-[9px] text-green-500 dark:text-green-400 animate-pulse">
-              ✓ Good! Release when done
+            <span className="text-[8px] sm:text-[9px] text-green-500 dark:text-green-400 animate-pulse">
+              ✓ Good! Release
             </span>
           )}
           {duration >= 10 && duration < 25 && (
-            <span className="text-[9px] text-yellow-500 dark:text-yellow-400">
-              Release when done (auto-stop at 30s)
+            <span className="text-[8px] sm:text-[9px] text-yellow-500 dark:text-yellow-400 text-center">
+              Release (auto-stop at 30s)
             </span>
           )}
           {duration >= 25 && (
-            <span className="text-[9px] text-orange-500 dark:text-orange-400 animate-pulse">
-              ⚠ Auto-stopping soon...
+            <span className="text-[8px] sm:text-[9px] text-orange-500 dark:text-orange-400 animate-pulse">
+              ⚠ Auto-stopping...
             </span>
           )}
         </div>
       )}
 
-      {/* Recording hint when not recording */}
+      {/* Recording hint - hide on mobile when space is limited */}
       {!isRecording && !disabled && (
-        <span className="text-[10px] text-gray-500 dark:text-gray-400 font-medium uppercase tracking-wider text-center">
+        <span className="hidden sm:block text-[10px] text-gray-500 dark:text-gray-400 font-medium uppercase tracking-wider text-center">
           Click & Hold
         </span>
       )}
 
-      {/* Recording active indicator */}
+      {/* Mobile recording indicator */}
       {isRecording && (
-        <div className="text-[10px] text-red-500 dark:text-red-400 font-bold uppercase tracking-wider animate-pulse text-center">
-          🔴 Recording... Release to send
+        <div className="text-[8px] sm:text-[10px] text-red-500 dark:text-red-400 font-bold uppercase tracking-wider animate-pulse text-center">
+          🔴 Recording
         </div>
       )}
     </div>

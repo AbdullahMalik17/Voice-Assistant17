@@ -43,22 +43,22 @@ export function ChatInput({
         disabled={disabled}
         rows={1}
         className={cn(
-          'flex-1 resize-none rounded-xl border border-gray-300 px-3 sm:px-4 py-2.5 sm:py-3',
-          'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent',
-          'placeholder:text-gray-400 text-gray-800 text-sm sm:text-base',
-          'min-h-[44px] sm:min-h-[48px] max-h-[120px]',
-          disabled && 'opacity-50 cursor-not-allowed bg-gray-50'
+          'flex-1 resize-none rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-dark-card dark:text-white px-3 sm:px-4 py-2 sm:py-3',
+          'focus:outline-none focus:ring-2 focus:ring-neon-blue focus:border-transparent dark:focus:ring-neon-blue',
+          'placeholder:text-gray-400 dark:placeholder:text-gray-500 text-gray-800 dark:text-white text-sm sm:text-base',
+          'min-h-[40px] sm:min-h-[48px] max-h-[120px]',
+          disabled && 'opacity-50 cursor-not-allowed bg-gray-50 dark:bg-dark-bg'
         )}
         style={{
           height: 'auto',
-          minHeight: '48px',
+          minHeight: '40px',
         }}
       />
       <Button
         onClick={handleSend}
         disabled={disabled || !text.trim()}
         size="icon"
-        className="h-11 w-11 sm:h-12 sm:w-12 rounded-xl"
+        className="h-10 w-10 sm:h-12 sm:w-12 rounded-lg sm:rounded-xl flex-shrink-0"
       >
         <Send className="w-4 h-4 sm:w-5 sm:h-5" />
       </Button>
