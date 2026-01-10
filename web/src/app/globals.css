@@ -38,7 +38,7 @@
 
 html,
 body {
-  max-width: 100vw;
+  max-width: 100%;
   overflow-x: hidden;
 }
 
@@ -61,6 +61,38 @@ body {
     linear-gradient(to bottom, rgb(var(--background-start-rgb)), rgb(var(--background-end-rgb)));
   background-size: cover, cover, 100% 100%;
   background-attachment: fixed;
+}
+
+/* Mobile optimization */
+@media (max-width: 640px) {
+  /* Reduce animation complexity on mobile for better performance */
+  .pulse-record,
+  .shimmer,
+  .audio-wave {
+    animation-duration: 2s;
+  }
+
+  /* Simpler gradients on mobile to reduce GPU load */
+  .dark body {
+    background: linear-gradient(
+      to bottom,
+      rgb(var(--background-start-rgb)),
+      rgb(var(--background-end-rgb))
+    );
+  }
+
+  /* Reduce neon glow intensity on mobile */
+  .neon-glow {
+    box-shadow:
+      0 0 5px rgba(0, 245, 255, 0.3),
+      0 0 10px rgba(0, 245, 255, 0.2);
+  }
+
+  .neon-glow-purple {
+    box-shadow:
+      0 0 5px rgba(191, 0, 255, 0.3),
+      0 0 10px rgba(191, 0, 255, 0.2);
+  }
 }
 
 /* Scrollbar styling - Light mode */

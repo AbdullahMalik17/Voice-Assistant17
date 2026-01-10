@@ -1,7 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { ConversationSessionPreview } from '@/types/conversation';
+import { useConversations, useDeleteConversation } from '@/hooks/useConversations';
 
 interface ConversationHistoryProps {
   userId?: string;
@@ -14,35 +13,8 @@ export function ConversationHistory({
   onSelectConversation,
   currentSessionId,
 }: ConversationHistoryProps) {
-  const [sessions, setSessions] = useState<ConversationSessionPreview[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetchConversations();
-  }, [userId]);
-
-  const fetchConversations = async () => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      const response = await fetch(`${apiUrl}/api/conversations?user_id=${userId}&limit=20`);
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch conversations');
-      }
-
-      const data = await response.json();
-      setSessions(data.sessions || []);
-    } catch (err) {
-      console.error('Error fetching conversations:', err);
-      setError(err instanceof Error ? err.message : 'Failed to load conversations');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { sessions, loading, error, refetch } = useConversations(userId);
+  const { deleteSession, deleting } = useDeleteConversation();
 
   const handleDelete = async (sessionId: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -51,20 +23,11 @@ export function ConversationHistory({
       return;
     }
 
-    try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      const response = await fetch(`${apiUrl}/api/conversations/${sessionId}?user_id=${userId}`, {
-        method: 'DELETE',
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to delete conversation');
-      }
-
+    const success = await deleteSession(sessionId, userId);
+    if (success) {
       // Refresh the list
-      fetchConversations();
-    } catch (err) {
-      console.error('Error deleting conversation:', err);
+      refetch();
+    } else {
       alert('Failed to delete conversation');
     }
   };
@@ -97,9 +60,9 @@ export function ConversationHistory({
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center h-full p-4">
-        <div className="text-red-500 dark:text-red-400 mb-4">{error}</div>
+        <div className="text-red-500 dark:text-red-400 mb-4">{error.message}</div>
         <button
-          onClick={fetchConversations}
+          onClick={refetch}
           className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
         >
           Retry
@@ -125,9 +88,10 @@ export function ConversationHistory({
       <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
         <h2 className="text-lg font-semibold">Conversations</h2>
         <button
-          onClick={fetchConversations}
+          onClick={refetch}
           className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
           title="Refresh"
+          disabled={loading}
         >
           <svg
             className="w-5 h-5"
@@ -159,12 +123,13 @@ export function ConversationHistory({
           >
             <div className="flex justify-between items-start mb-2">
               <div className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate flex-1">
-                {session.preview || 'Empty conversation'}
+                {session.title || 'Untitled conversation'}
               </div>
               <button
                 onClick={(e) => handleDelete(session.session_id, e)}
                 className="ml-2 text-gray-400 hover:text-red-500 dark:hover:text-red-400"
                 title="Delete"
+                disabled={deleting}
               >
                 <svg
                   className="w-4 h-4"
@@ -183,7 +148,7 @@ export function ConversationHistory({
             </div>
 
             <div className="flex justify-between items-center text-xs text-gray-500 dark:text-gray-400">
-              <span>{session.turn_count} messages</span>
+              <span>{session.state}</span>
               <span>{formatDate(session.last_updated)}</span>
             </div>
 

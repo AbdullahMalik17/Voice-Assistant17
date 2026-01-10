@@ -181,7 +181,7 @@ export function ChatContainer() {
   };
 
   return (
-    <div className="flex h-screen max-w-full relative">
+    <div className="flex min-h-screen max-w-full relative">
       {/* Conversation Sidebar */}
       <ConversationSidebar
         userId={session?.user?.id || 'default'}
@@ -195,24 +195,24 @@ export function ChatContainer() {
       />
 
       {/* Main Chat Area */}
-      <div className="flex flex-col flex-1 h-screen max-w-6xl mx-auto relative">
+      <div className="flex flex-col flex-1 min-h-screen max-w-6xl mx-auto relative">
         {/* Animated background grid (dark mode only) */}
         <div className="absolute inset-0 dark:cyber-grid-bg opacity-20 pointer-events-none" />
 
       {/* Header with glassmorphism */}
-      <header className="relative z-10 px-6 py-4 glass border-b dark:border-neon-blue/20 card-shadow animate-slide-down">
+      <header className="relative z-10 px-3 sm:px-6 py-3 sm:py-4 glass border-b dark:border-neon-blue/20 card-shadow animate-slide-down">
         <div className="flex items-center justify-between">
           {/* Logo and title */}
           <div className="flex items-center gap-4">
             {/* Animated logo */}
-            <div className="relative w-12 h-12 rounded-xl bg-gradient-to-br from-neon-blue via-neon-purple to-neon-pink p-[2px] animate-float">
+            <div className="relative w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-neon-blue via-neon-purple to-neon-pink p-[2px] animate-float">
               <div className="w-full h-full rounded-xl bg-dark-bg dark:bg-black flex items-center justify-center">
                 <Zap className="w-6 h-6 text-neon-blue dark:drop-shadow-[0_0_10px_rgba(0,245,255,0.8)]" />
               </div>
             </div>
 
             <div>
-              <h1 className="text-xl font-bold bg-gradient-to-r from-neon-blue via-neon-purple to-neon-pink bg-clip-text text-transparent font-[family-name:var(--font-orbitron)]">
+              <h1 className="text-lg sm:text-xl font-bold bg-gradient-to-r from-neon-blue via-neon-purple to-neon-pink bg-clip-text text-transparent font-[family-name:var(--font-orbitron)]">
                 NEXUS AI
               </h1>
               <p className="text-xs text-gray-500 dark:text-gray-400">

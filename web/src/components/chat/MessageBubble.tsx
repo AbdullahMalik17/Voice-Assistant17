@@ -31,7 +31,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
   return (
     <div
       className={cn(
-        'flex gap-3 max-w-[85%] animate-slide-up',
+        'flex gap-2 sm:gap-3 max-w-[90%] sm:max-w-[85%] animate-slide-up',
         isUser ? 'ml-auto flex-row-reverse' : 'mr-auto',
         isSystem && 'mx-auto max-w-full'
       )}
@@ -61,7 +61,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
       {/* Message content with glassmorphism */}
       <div
         className={cn(
-          'rounded-2xl px-4 py-3 backdrop-blur-sm transition-all duration-300 card-shadow',
+          'rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3 backdrop-blur-sm transition-all duration-300 card-shadow',
           isUser
             ? 'bg-gradient-to-br from-neon-blue/90 to-neon-purple/90 text-white rounded-br-md border border-neon-blue/30 dark:border-neon-blue/50'
             : isError

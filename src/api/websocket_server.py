@@ -43,6 +43,14 @@ except ImportError as e:
     logger.warning(f"Memory services not available: {e}")
     MEMORY_AVAILABLE = False
 
+# Supabase conversation persistence
+try:
+    from src.services.supabase_conversation import SupabaseConversationService
+    SUPABASE_AVAILABLE = True
+except ImportError as e:
+    logger.warning(f"Supabase service not available: {e}")
+    SUPABASE_AVAILABLE = False
+
 # Authentication imports
 try:
     from src.auth import authenticate_websocket, get_user_id_from_auth, AuthenticationError
@@ -255,6 +263,21 @@ class VoiceAssistantHandler:
             logger.warning(f"Persistent memory not available: {e}")
             self.persistent_memory = None
 
+        # Initialize Supabase conversation persistence
+        if SUPABASE_AVAILABLE:
+            try:
+                self.supabase_conversation = SupabaseConversationService()
+                if self.supabase_conversation.is_available():
+                    logger.info("Supabase conversation service initialized")
+                else:
+                    logger.warning("Supabase conversation service created but not available (check credentials)")
+                    self.supabase_conversation = None
+            except Exception as e:
+                logger.warning(f"Supabase conversation service not available: {e}")
+                self.supabase_conversation = None
+        else:
+            self.supabase_conversation = None
+
         # Initialize semantic memory (optional, legacy)
         if MEMORY_AVAILABLE:
             try:
@@ -387,6 +410,19 @@ class VoiceAssistantHandler:
                                         }
                                     )
 
+                                # Store tool execution in Supabase (non-blocking)
+                                if self.supabase_conversation:
+                                    asyncio.create_task(
+                                        self.supabase_conversation.add_turn(
+                                            session_id=user_id,  # Using user_id as session_id
+                                            user_input=text,
+                                            assistant_response=response_text,
+                                            intent="tool_execution",
+                                            intent_confidence=1.0,
+                                            entities={"tool_data": tool_data}
+                                        )
+                                    )
+
                                 # Store tool execution in SQLite dialogue state
                                 if self.dialogue:
                                     self.dialogue.update_session(
@@ -498,6 +534,19 @@ class VoiceAssistantHandler:
                         "intent": intent_result.intent_type if intent_result else "unknown",
                         "confidence": intent_result.confidence if intent_result else 0.0
                     }
+                )
+
+            # Store conversation in Supabase (non-blocking)
+            if self.supabase_conversation:
+                asyncio.create_task(
+                    self.supabase_conversation.add_turn(
+                        session_id=user_id,  # Using user_id as session_id
+                        user_input=text,
+                        assistant_response=response,
+                        intent=intent_result.intent_type if intent_result else "unknown",
+                        intent_confidence=intent_result.confidence if intent_result else 0.0,
+                        entities={}
+                    )
                 )
 
             # Update dialogue state if available (legacy)

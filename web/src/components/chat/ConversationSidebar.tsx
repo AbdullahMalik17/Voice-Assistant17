@@ -36,7 +36,7 @@ export function ConversationSidebar({
       />
 
       {/* Sidebar */}
-      <div className="fixed lg:relative inset-y-0 left-0 w-80 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 z-50 flex flex-col">
+      <div className="fixed lg:relative inset-y-0 left-0 w-full sm:w-80 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 z-50 flex flex-col">
         {/* Header with Close Button */}
         <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
           <h2 className="text-lg font-semibold">History</h2>

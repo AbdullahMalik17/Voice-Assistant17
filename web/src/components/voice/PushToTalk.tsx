@@ -64,7 +64,7 @@ export function PushToTalk({ onAudioReady, disabled }: PushToTalkProps) {
         onTouchEnd={stopRecording}
         disabled={disabled}
         className={cn(
-          'relative flex items-center justify-center w-16 h-16 rounded-full',
+          'relative flex items-center justify-center w-14 h-14 sm:w-16 sm:h-16 rounded-full',
           'transition-all duration-300 ease-out',
           'focus:outline-none focus-visible:ring-4 focus-visible:ring-neon-blue/50',
           'btn-hover group',
@@ -82,9 +82,9 @@ export function PushToTalk({ onAudioReady, disabled }: PushToTalkProps) {
         aria-label={isRecording ? 'Recording... Release to send' : 'Hold to speak'}
       >
         {isRecording ? (
-          <Radio className="w-8 h-8 text-white animate-pulse" />
+          <Radio className="w-7 h-7 sm:w-8 sm:h-8 text-white animate-pulse" />
         ) : (
-          <Mic className="w-8 h-8 text-white group-hover:scale-110 transition-transform" />
+          <Mic className="w-7 h-7 sm:w-8 sm:h-8 text-white group-hover:scale-110 transition-transform" />
         )}
 
         {/* Animated pulse rings when recording */}

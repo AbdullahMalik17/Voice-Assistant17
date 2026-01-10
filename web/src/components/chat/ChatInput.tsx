@@ -43,10 +43,10 @@ export function ChatInput({
         disabled={disabled}
         rows={1}
         className={cn(
-          'flex-1 resize-none rounded-xl border border-gray-300 px-4 py-3',
+          'flex-1 resize-none rounded-xl border border-gray-300 px-3 sm:px-4 py-2.5 sm:py-3',
           'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent',
-          'placeholder:text-gray-400 text-gray-800',
-          'min-h-[48px] max-h-[120px]',
+          'placeholder:text-gray-400 text-gray-800 text-sm sm:text-base',
+          'min-h-[44px] sm:min-h-[48px] max-h-[120px]',
           disabled && 'opacity-50 cursor-not-allowed bg-gray-50'
         )}
         style={{
@@ -58,9 +58,9 @@ export function ChatInput({
         onClick={handleSend}
         disabled={disabled || !text.trim()}
         size="icon"
-        className="h-12 w-12 rounded-xl"
+        className="h-11 w-11 sm:h-12 sm:w-12 rounded-xl"
       >
-        <Send className="w-5 h-5" />
+        <Send className="w-4 h-4 sm:w-5 sm:h-5" />
       </Button>
     </div>
   );
