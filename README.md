@@ -1,5 +1,5 @@
 ---
-title: Voice Assistant
+title: Malik AI - Voice Assistant
 emoji: 🎙️
 colorFrom: blue
 colorTo: indigo
@@ -9,7 +9,7 @@ pinned: false
 update_trigger: 1
 ---
 
-# Voice Assistant
+# Malik AI - Voice Assistant
 
 A privacy-first, cross-platform voice assistant with agentic AI capabilities including persistent memory, web interface, and intelligent planning with autonomous task execution.
 
@@ -121,7 +121,7 @@ npm run dev
 
 **Step 4: Access the Application**
 - Open browser: http://localhost:3000
-- You should see the Voice Assistant chat interface
+- You should see the Malik AI chat interface
 - Backend API: http://localhost:8000
 - Health check: http://localhost:8000/health
 
@@ -320,6 +320,179 @@ npm run dev -- -p 3001
 **Multi-Step Goals** (Agentic):
 - "Schedule a meeting with John for next week"
 - "Search for Python tutorials and summarize them"
+
+## 🚀 Deployment
+
+The Malik AI Voice Assistant supports multiple deployment options for different use cases and scales. Choose the deployment method that best fits your needs.
+
+### Quick Deployment Options
+
+#### 1. **Production Deployment (Recommended)** - Vercel + Hugging Face + Supabase
+
+**Best for:** Production apps with authentication, conversation history, and scaling
+
+**Stack:**
+- **Frontend:** Vercel (Next.js 14)
+- **Backend:** Hugging Face Spaces (FastAPI + WebSocket)
+- **Database:** Supabase (PostgreSQL)
+- **Authentication:** NextAuth.js + Supabase Auth
+
+**Deploy in 30 minutes:**
+1. **Supabase Setup** (10 min)
+   - Create project at https://supabase.com/dashboard
+   - Run migrations: `supabase/migrations/001_user_profiles.sql`, `002_conversation_sessions.sql`, `003_conversation_turns.sql`
+   - Configure authentication and get API keys
+
+2. **Hugging Face Spaces** (10 min)
+   - Deploy backend to https://huggingface.co/spaces
+   - Add environment variables for authentication
+   - Configure CORS origins
+
+3. **Vercel Deployment** (10 min)
+   - Connect GitHub repository to Vercel
+   - Set environment variables for Supabase and backend URLs
+   - Deploy automatically on git push
+
+**Cost:** Free tier available, scales with usage
+**Features:** Full authentication, conversation persistence, production-ready
+
+#### 2. **Cloud Deployment** - Render + Vercel + Supabase
+
+**Best for:** Alternative cloud deployment with Render's reliability
+
+**Stack:**
+- **Frontend:** Vercel (Next.js)
+- **Backend:** Render (FastAPI)
+- **Database:** Supabase (PostgreSQL)
+
+**Deploy using render.yaml:**
+```bash
+# Use the provided render.yaml configuration
+# Deploy both frontend and backend services
+# Configure environment variables in Render dashboard
+```
+
+#### 3. **Railway Deployment**
+
+**Best for:** Simple cloud deployment with Railway's platform
+
+**Configuration:**
+```json
+{
+  "build": {
+    "builder": "NIXPACKS"
+  },
+  "deploy": {
+    "startCommand": "uvicorn src.api.websocket_server:app --host 0.0.0.0 --port $PORT"
+  }
+}
+```
+
+### Local Development Deployment
+
+#### Docker Deployment
+
+**Best for:** Containerized local development and testing
+
+```bash
+# Build and run with Docker Compose
+cd docker
+docker-compose up --build
+
+# Or use the main Dockerfile
+docker build -t voice-assistant .
+docker run -p 8000:8000 voice-assistant
+```
+
+#### Manual Local Deployment
+
+**Backend:**
+```bash
+# Install Python dependencies
+pip install -r requirements.txt
+
+# Start FastAPI server
+uvicorn src.api.websocket_server:app --host 0.0.0.0 --port 8000
+```
+
+**Frontend:**
+```bash
+cd web
+npm install
+npm run dev  # Development
+npm run build && npm start  # Production
+```
+
+### Environment Variables
+
+#### Required for All Deployments
+```bash
+# Core API Keys
+GEMINI_API_KEY=your-gemini-api-key
+PICOVOICE_ACCESS_KEY=your-picovoice-key
+
+# Optional Services
+OPENAI_API_KEY=your-openai-key
+ELEVENLABS_API_KEY=your-elevenlabs-key
+MEM0_API_KEY=your-mem0-key
+```
+
+#### Production Environment Variables
+```bash
+# Supabase (for authentication & database)
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+
+# NextAuth.js
+NEXTAUTH_SECRET=your-nextauth-secret
+NEXTAUTH_URL=https://your-domain.com
+
+# Backend URLs
+NEXT_PUBLIC_WS_URL=wss://your-backend-domain/ws/voice
+NEXT_PUBLIC_API_URL=https://your-backend-domain
+```
+
+### Deployment Platforms
+
+| Platform | Frontend | Backend | Database | Authentication | Cost |
+|----------|----------|---------|----------|----------------|------|
+| **Vercel + HF + Supabase** | ✅ Vercel | ✅ Hugging Face Spaces | ✅ Supabase | ✅ NextAuth + Supabase | Free tier available |
+| **Render + Vercel + Supabase** | ✅ Vercel | ✅ Render | ✅ Supabase | ✅ NextAuth + Supabase | Free tier available |
+| **Railway** | ❌ | ✅ Railway | ❌ | ❌ | Free tier available |
+| **Docker** | ✅ | ✅ | ✅ | ✅ | Local only |
+| **Local** | ✅ | ✅ | ✅ | ✅ | Free |
+
+### Production Checklist
+
+- [ ] **Security:** HTTPS enabled, strong secrets, CORS configured
+- [ ] **Authentication:** Email confirmation enabled for production
+- [ ] **Database:** Migrations run, RLS policies active
+- [ ] **Monitoring:** Logs configured, health checks working
+- [ ] **Scaling:** Backend can handle concurrent connections
+- [ ] **Backup:** Database backups configured (Supabase auto-backups)
+
+### Troubleshooting Deployment
+
+**Connection Issues:**
+- Verify `NEXT_PUBLIC_WS_URL` points to correct backend
+- Check CORS settings include your frontend domain
+- Ensure backend is running and accessible
+
+**Authentication Issues:**
+- Confirm `NEXTAUTH_SECRET` matches across services
+- Verify Supabase JWT secret is set in backend
+- Check email confirmation settings
+
+**Database Issues:**
+- Run migrations in correct order
+- Verify RLS policies are active
+- Check connection strings and permissions
+
+For detailed deployment guides, see:
+- [Complete Deployment Guide](DEPLOYMENT_GUIDE.md)
+- [Production Deployment Guide](PRODUCTION_DEPLOYMENT_GUIDE.md)
+- [Web Deployment Guide](docs/WEB_DEPLOYMENT.md)
 
 ## Architecture
 
