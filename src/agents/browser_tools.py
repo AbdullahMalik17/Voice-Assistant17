@@ -725,7 +725,8 @@ class SetCookiesTool(Tool):
                     "List of cookies to set. Each cookie should have 'name' and 'value'. "
                     "Example: [{'name': 'session', 'value': '12345', 'domain': 'example.com'}]"
                 ),
-                required=True
+                required=True,
+                items_type="object"
             )
         ]
         self._examples = [
@@ -787,7 +788,8 @@ class ExecuteScriptTool(Tool):
                 name="args",
                 type="array",
                 description="Optional arguments to pass to the script",
-                required=False
+                required=False,
+                items_type="string"
             )
         ]
         self._examples = [

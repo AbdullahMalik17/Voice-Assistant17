@@ -24,18 +24,29 @@ class ToolCategory(str, Enum):
     CUSTOM = "custom"
 
 
-@dataclass
 class ToolParameter:
     """Definition of a tool parameter"""
     name: str
     type: str  # string, number, boolean, array, object
     description: str
-    required: bool = True
-    default: Optional[Any] = None
-    enum: Optional[List[Any]] = None  # Allowed values
+    required: bool
+    default: Optional[Any]
+    enum: Optional[List[Any]]
+    items_type: Optional[str]  # Type of items in array (for Gemini API)
+
+    def __init__(self, name: str, type: str, description: str, required: bool = True,
+                 default: Optional[Any] = None, enum: Optional[List[Any]] = None,
+                 items_type: Optional[str] = None):
+        self.name = name
+        self.type = type
+        self.description = description
+        self.required = required
+        self.default = default
+        self.enum = enum
+        self.items_type = items_type
 
     def to_dict(self) -> Dict[str, Any]:
-        return {
+        result = {
             "name": self.name,
             "type": self.type,
             "description": self.description,
@@ -43,6 +54,9 @@ class ToolParameter:
             "default": self.default,
             "enum": self.enum
         }
+        if self.items_type:
+            result["items_type"] = self.items_type
+        return result
 
 
 @dataclass
