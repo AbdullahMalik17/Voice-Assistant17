@@ -271,19 +271,29 @@ class LLMService:
         for tool in self.tool_registry._tools.values():
             desc = tool.get_description()
 
+            # Build properties with proper handling of array types
+            properties = {}
+            for param in desc.parameters:
+                prop = {
+                    "type": param.type,
+                    "description": param.description
+                }
+
+                # For array types, add items field (required by Gemini API)
+                if param.type == "array" and hasattr(param, 'items_type') and param.items_type:
+                    prop["items"] = {
+                        "type": param.items_type
+                    }
+
+                properties[param.name] = prop
+
             # Build function declaration
             function_declaration = types.FunctionDeclaration(
                 name=desc.name,
                 description=desc.description,
                 parameters={
                     "type": "object",
-                    "properties": {
-                        param.name: {
-                            "type": param.type,
-                            "description": param.description
-                        }
-                        for param in desc.parameters
-                    },
+                    "properties": properties,
                     "required": [p.name for p in desc.parameters if p.required]
                 }
             )
