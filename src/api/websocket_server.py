@@ -332,8 +332,14 @@ class VoiceAssistantHandler:
                 logger.warning(f"Agent services not available: {e}")
                 logger.error(f"Error details: {e}")
 
-    async def process_text(self, text: str, user_id: str, context: List[dict] = None) -> dict:
-        """Process text input and return response."""
+    async def process_text(self, text: str, user_id: str, context: Optional[List[dict]] = None) -> dict:
+        """Process text input and return response.
+
+        Args:
+            text: The user's input text
+            user_id: The user/session ID
+            context: Optional list of message dicts with 'role' and 'content' keys
+        """
         try:
             # Check if this is a complex request that could benefit from tools
             should_use_agent = False
@@ -595,7 +601,7 @@ class VoiceAssistantHandler:
                     self.llm.generate_response,
                     query=query_with_context,
                     intent=intent_result,
-                    context=context  # Pass context object for additional processing
+                    context=None  # Context already built into query_with_context string
                 )
             else:
                 response = f"Echo: {text} (LLM service not available)"
