@@ -168,6 +168,9 @@ class SimpleEventLogger:
     def __init__(self, logger):
         self._logger = logger
 
+    def debug(self, event=None, message=None, **kwargs):
+        self._logger.debug(f"{event}: {message}" if event else str(message))
+
     def info(self, event=None, message=None, **kwargs):
         self._logger.info(f"{event}: {message}" if event else str(message))
 
