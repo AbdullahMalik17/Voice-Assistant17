@@ -205,6 +205,10 @@ class VoiceAssistantHandler:
         self.dialogue = None
         self.planner = None
         self.guardrails = None
+        self.persistent_memory = None
+        self.supabase_conversation = None
+        self.sqlite_store = None
+        self.audio_utils = None
 
         # Initialize available services
         if SERVICES_AVAILABLE:
@@ -254,26 +258,34 @@ class VoiceAssistantHandler:
             except Exception as e:
                 logger.warning(f"STT service not available: {e}")
 
-        # Initialize persistent memory (mem0)
+        # Initialize SQLite store FIRST (critical for persistence)
+        try:
+            self.sqlite_store = SqliteStore()
+            logger.info("SQLite store initialized for conversation persistence")
+        except Exception as e:
+            logger.warning(f"SQLite store not available: {e}")
+            self.sqlite_store = None
+
+        # Initialize persistent memory (mem0) - OPTIONAL
         try:
             from src.services.persistent_memory import PersistentMemoryService
             self.persistent_memory = PersistentMemoryService()
             logger.info("Persistent memory service initialized")
         except Exception as e:
-            logger.warning(f"Persistent memory not available: {e}")
+            logger.debug(f"Persistent memory not available (optional): {e}")
             self.persistent_memory = None
 
-        # Initialize Supabase conversation persistence
+        # Initialize Supabase conversation persistence (OPTIONAL)
         if SUPABASE_AVAILABLE:
             try:
                 self.supabase_conversation = SupabaseConversationService()
                 if self.supabase_conversation.is_available():
                     logger.info("Supabase conversation service initialized")
                 else:
-                    logger.warning("Supabase conversation service created but not available (check credentials)")
+                    logger.debug("Supabase conversation service created but not available (optional)")
                     self.supabase_conversation = None
             except Exception as e:
-                logger.warning(f"Supabase conversation service not available: {e}")
+                logger.debug(f"Supabase conversation service not available (optional): {e}")
                 self.supabase_conversation = None
         else:
             self.supabase_conversation = None
@@ -284,12 +296,13 @@ class VoiceAssistantHandler:
                 from src.memory.semantic_memory import MemoryConfig
                 memory_config = MemoryConfig()
                 self.memory = SemanticMemory(memory_config)
-                
-                # Initialize SQLite store for session persistence
-                self.sqlite_store = SqliteStore()
-                
-                self.dialogue = DialogueStateManager(self.memory, sqlite_store=self.sqlite_store)
-                logger.info("Semantic and persistent session memory services initialized")
+
+                # Initialize DialogueStateManager with SQLite store
+                if self.sqlite_store:
+                    self.dialogue = DialogueStateManager(self.memory, sqlite_store=self.sqlite_store)
+                    logger.info("Semantic and persistent session memory services initialized")
+                else:
+                    logger.warning("DialogueStateManager not initialized (SQLite store unavailable)")
             except Exception as e:
                 logger.warning(f"Semantic memory services not available: {e}")
 
@@ -397,42 +410,63 @@ class VoiceAssistantHandler:
                                     "tool_execution": True
                                 }
 
-                                # Store tool execution in persistent memory
-                                if self.persistent_memory:
-                                    self.persistent_memory.add_conversation(
-                                        user_message=text,
-                                        assistant_message=response_text,
-                                        user_id=user_id,
-                                        metadata={
-                                            "intent": "tool_execution",
-                                            "confidence": 1.0,
-                                            "tool_data": tool_data
-                                        }
-                                    )
-
-                                # Store tool execution in Supabase (non-blocking)
-                                if self.supabase_conversation:
-                                    asyncio.create_task(
-                                        self.supabase_conversation.add_turn(
-                                            session_id=user_id,  # Using user_id as session_id
+                                # Store tool execution in SQLite (PRIMARY)
+                                if self.dialogue:
+                                    try:
+                                        self.dialogue.update_session(
+                                            session_id=user_id,
                                             user_input=text,
                                             assistant_response=response_text,
                                             intent="tool_execution",
                                             intent_confidence=1.0,
                                             entities={"tool_data": tool_data}
                                         )
-                                    )
+                                    except Exception as e:
+                                        logger.warning(f"Failed to store tool execution: {e}")
+                                elif self.sqlite_store:
+                                    # Fallback: directly use sqlite_store
+                                    try:
+                                        self.sqlite_store.add_turn(
+                                            session_id=user_id,
+                                            user_input=text,
+                                            assistant_response=response_text,
+                                            intent="tool_execution",
+                                            intent_confidence=1.0
+                                        )
+                                    except Exception as e:
+                                        logger.warning(f"Failed to store tool execution in SQLite: {e}")
 
-                                # Store tool execution in SQLite dialogue state
-                                if self.dialogue:
-                                    self.dialogue.update_session(
-                                        session_id=user_id,
-                                        user_input=text,
-                                        assistant_response=response_text,
-                                        intent="tool_execution",
-                                        intent_confidence=1.0,
-                                        entities={"tool_data": tool_data}
-                                    )
+                                # Store tool execution in persistent memory (OPTIONAL)
+                                if self.persistent_memory:
+                                    try:
+                                        self.persistent_memory.add_conversation(
+                                            user_message=text,
+                                            assistant_message=response_text,
+                                            user_id=user_id,
+                                            metadata={
+                                                "intent": "tool_execution",
+                                                "confidence": 1.0,
+                                                "tool_data": tool_data
+                                            }
+                                        )
+                                    except Exception as e:
+                                        logger.debug(f"Failed to store in persistent memory: {e}")
+
+                                # Store tool execution in Supabase (OPTIONAL, non-blocking)
+                                if self.supabase_conversation:
+                                    try:
+                                        asyncio.create_task(
+                                            self.supabase_conversation.add_turn(
+                                                session_id=user_id,
+                                                user_input=text,
+                                                assistant_response=response_text,
+                                                intent="tool_execution",
+                                                intent_confidence=1.0,
+                                                entities={"tool_data": tool_data}
+                                            )
+                                        )
+                                    except Exception as e:
+                                        logger.debug(f"Failed to queue Supabase storage: {e}")
 
                                 # Generate TTS audio for tool response
                                 if self.tts:
@@ -473,6 +507,14 @@ class VoiceAssistantHandler:
             # Skip intent classification for web interface (requires voice_command_id)
             intent_result = None
 
+            # Load user profile first (critical for memory)
+            user_profile = None
+            if self.sqlite_store:
+                try:
+                    user_profile = self.sqlite_store.get_user_profile(user_id)
+                except Exception as e:
+                    logger.debug(f"Failed to load user profile: {e}")
+
             # Retrieve relevant memories from persistent memory (mem0)
             persistent_context = ""
             if self.persistent_memory:
@@ -489,8 +531,16 @@ class VoiceAssistantHandler:
 
             # Build context string with memories
             context_str = ""
+
+            # Add user profile information at the top (name, preferences, etc.)
+            if user_profile:
+                context_str += "User Information:\n"
+                for key, value in user_profile.items():
+                    context_str += f"- {key}: {value}\n"
+                context_str += "\n"
+
             if persistent_context:
-                context_str = persistent_context + "\n\n"
+                context_str += f"Additional Context:\n{persistent_context}\n\n"
 
             # Add SQLite conversation history for better context
             if self.dialogue:
@@ -498,67 +548,113 @@ class VoiceAssistantHandler:
                 if dialogue_state and dialogue_state.turns:
                     history_context = dialogue_state.get_context_for_llm(max_turns=10)
                     if history_context:
-                        context_str += history_context + "\n\n"
+                        context_str += f"Previous Conversation:\n{history_context}\n\n"
 
             if context:
+                context_str += "Current Session:\n"
                 context_str += "\n".join([
                     f"{msg['role']}: {msg['content']}"
                     for msg in context[-5:]
                 ])
+                context_str += "\n"
+
             if memory_context:
-                context_str += "\n" + str(memory_context)
+                context_str += f"Semantic Memory:\n{str(memory_context)}\n"
 
             # Generate response with memory context
             if self.llm:
-                # If we have persistent context, include it in the query
-                query_with_context = text
+                # Build complete context string with user information and history
+                context_str = ""
+
+                # Include persistent memory context (user name, preferences, etc.)
                 if persistent_context:
-                    query_with_context = f"{persistent_context}\n\nUser query: {text}"
+                    context_str += f"User Information:\n{persistent_context}\n\n"
+
+                # Include recent conversation history from SQLite
+                if self.dialogue:
+                    dialogue_state = self.dialogue.get_session(user_id)
+                    if dialogue_state and dialogue_state.turns:
+                        history_context = dialogue_state.get_context_for_llm(max_turns=5)
+                        if history_context:
+                            context_str += f"Recent Conversation:\n{history_context}\n\n"
+
+                # Include session context
+                if context and isinstance(context, list):
+                    context_str += "Conversation Context:\n"
+                    for msg in context[-3:]:  # Last 3 messages
+                        context_str += f"{msg['role'].title()}: {msg['content']}\n"
+                    context_str += "\n"
+
+                # Build final query with context
+                query_with_context = f"{context_str}Current User Query: {text}"
 
                 response = await asyncio.to_thread(
                     self.llm.generate_response,
                     query=query_with_context,
                     intent=intent_result,
-                    context=None  # Context handling simplified for web interface
+                    context=context  # Pass context object for additional processing
                 )
             else:
                 response = f"Echo: {text} (LLM service not available)"
 
-            # Store conversation in persistent memory
-            if self.persistent_memory:
-                self.persistent_memory.add_conversation(
-                    user_message=text,
-                    assistant_message=response,
-                    user_id=user_id,
-                    metadata={
-                        "intent": intent_result.intent_type if intent_result else "unknown",
-                        "confidence": intent_result.confidence if intent_result else 0.0
-                    }
-                )
-
-            # Store conversation in Supabase (non-blocking)
-            if self.supabase_conversation:
-                asyncio.create_task(
-                    self.supabase_conversation.add_turn(
-                        session_id=user_id,  # Using user_id as session_id
+            # Store conversation in SQLite (PRIMARY - always try this first)
+            if self.dialogue:
+                try:
+                    self.dialogue.update_session(
+                        session_id=user_id,
                         user_input=text,
                         assistant_response=response,
                         intent=intent_result.intent_type if intent_result else "unknown",
                         intent_confidence=intent_result.confidence if intent_result else 0.0,
                         entities={}
                     )
-                )
+                    logger.debug(f"Conversation stored in SQLite for session {user_id}")
+                except Exception as e:
+                    logger.warning(f"Failed to store in dialogue state: {e}")
+            elif self.sqlite_store:
+                # Fallback: directly use sqlite_store if dialogue is not available
+                try:
+                    self.sqlite_store.add_turn(
+                        session_id=user_id,
+                        user_input=text,
+                        assistant_response=response,
+                        intent=intent_result.intent_type if intent_result else "unknown",
+                        intent_confidence=intent_result.confidence if intent_result else 0.0
+                    )
+                    logger.debug(f"Conversation stored directly in SQLite for session {user_id}")
+                except Exception as e:
+                    logger.warning(f"Failed to store in SQLite: {e}")
 
-            # Update dialogue state if available (legacy)
-            if self.dialogue:
-                self.dialogue.update_session(
-                    session_id=user_id,  # Using user_id as session_id for now
-                    user_input=text,
-                    assistant_response=response,
-                    intent=intent_result.intent_type if intent_result else "unknown",
-                    intent_confidence=intent_result.confidence if intent_result else 0.0,
-                    entities={}
-                )
+            # Store conversation in persistent memory (OPTIONAL - mem0)
+            if self.persistent_memory:
+                try:
+                    self.persistent_memory.add_conversation(
+                        user_message=text,
+                        assistant_message=response,
+                        user_id=user_id,
+                        metadata={
+                            "intent": intent_result.intent_type if intent_result else "unknown",
+                            "confidence": intent_result.confidence if intent_result else 0.0
+                        }
+                    )
+                except Exception as e:
+                    logger.debug(f"Failed to store in persistent memory (optional): {e}")
+
+            # Store conversation in Supabase (OPTIONAL - non-blocking)
+            if self.supabase_conversation:
+                try:
+                    asyncio.create_task(
+                        self.supabase_conversation.add_turn(
+                            session_id=user_id,
+                            user_input=text,
+                            assistant_response=response,
+                            intent=intent_result.intent_type if intent_result else "unknown",
+                            intent_confidence=intent_result.confidence if intent_result else 0.0,
+                            entities={}
+                        )
+                    )
+                except Exception as e:
+                    logger.debug(f"Failed to queue Supabase storage (optional): {e}")
 
             result = {
                 "text": response,
@@ -734,10 +830,14 @@ app.add_middleware(
 
 @app.websocket("/ws/voice")
 async def websocket_voice_endpoint(websocket: WebSocket):
-    """WebSocket endpoint for real-time voice/text communication with JWT authentication."""
-    await websocket.accept()
+    """WebSocket endpoint for real-time voice/text communication."""
+    try:
+        await websocket.accept()
+    except Exception as e:
+        logger.error(f"❌ Failed to accept WebSocket connection: {e}")
+        return
 
-    # Authenticate user
+    # Authenticate user (optional)
     user_info = None
     user_id = "anonymous"
 
@@ -747,33 +847,21 @@ async def websocket_voice_endpoint(websocket: WebSocket):
             user_id = get_user_id_from_auth(user_info)
             logger.info(f"✅ Authenticated user: {user_info.get('email', 'unknown')} (ID: {user_id})")
         except AuthenticationError as e:
-            logger.error(f"❌ Authentication failed: {e}")
-            await websocket.send_json({
-                "type": "error",
-                "content": {"error": str(e)},
-                "session_id": "none"
-            })
-            await websocket.close(code=1008, reason="Authentication failed")
-            return
+            logger.warning(f"⚠️  Authentication optional: {e}")
+            # Allow connection as anonymous if auth fails
+            user_id = "anonymous"
         except Exception as e:
-            logger.error(f"❌ Unexpected auth error: {e}")
-            # Allow connection but log error
+            logger.warning(f"⚠️  Auth error (allowing anonymous): {e}")
+            # Allow connection as anonymous
             user_id = "anonymous"
 
-    # Use user_id as session_id for authenticated users, or generate one for anonymous
-    session_id = user_id if user_id != "anonymous" else session_manager.create_session(websocket)
+    # Always create a session (anonymous or authenticated)
+    session_id = session_manager.create_session(websocket)
 
-    if user_id == "anonymous":
-        session_id = session_manager.create_session(websocket)
-    else:
-        # For authenticated users, use user_id as session_id
-        session_manager.sessions[session_id] = {
-            "websocket": websocket,
-            "messages": [],
-            "created_at": datetime.utcnow(),
-            "last_activity": datetime.utcnow(),
-            "user_info": user_info
-        }
+    # Store user info if authenticated
+    if user_info:
+        session_manager.sessions[session_id]["user_info"] = user_info
+        session_manager.sessions[session_id]["user_id"] = user_id
 
     try:
         # Send session info with user context
@@ -791,22 +879,25 @@ async def websocket_voice_endpoint(websocket: WebSocket):
         )
 
         # Load conversation history from SQLite if available
-        if handler and handler.dialogue:
-            dialogue_state = handler.dialogue.get_session(session_id)
-            if dialogue_state and dialogue_state.turns:
-                recent_turns = dialogue_state.get_recent_turns(10)
-                if recent_turns:
-                    await websocket.send_json(
-                        WebSocketMessage(
-                            type=MessageType.SYSTEM,
-                            content={
-                                "message": "Conversation history loaded",
-                                "turns": [t.to_dict() for t in recent_turns],
-                                "history_loaded": True
-                            },
-                            session_id=session_id
-                        ).to_dict()
-                    )
+        if handler and handler.dialogue and handler.sqlite_store:
+            try:
+                dialogue_state = handler.dialogue.get_session(session_id)
+                if dialogue_state and dialogue_state.turns:
+                    recent_turns = dialogue_state.get_recent_turns(10)
+                    if recent_turns:
+                        await websocket.send_json(
+                            WebSocketMessage(
+                                type=MessageType.SYSTEM,
+                                content={
+                                    "message": "Conversation history loaded",
+                                    "turns": [t.to_dict() for t in recent_turns],
+                                    "history_loaded": True
+                                },
+                                session_id=session_id
+                            ).to_dict()
+                        )
+            except Exception as e:
+                logger.warning(f"Failed to load conversation history: {e}")
         while True:
             data = await websocket.receive_json()
             msg_type = data.get("type", "text")
@@ -1154,6 +1245,186 @@ async def export_conversation(session_id: str, user_id: str = "default", format:
             })
     except HTTPException:
         raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Settings Management Endpoints
+@app.get("/api/settings")
+async def get_user_settings(user_id: str = "default"):
+    """
+    Get user settings from storage.
+    Query params:
+        - user_id: User identifier (default: "default")
+    """
+    if not handler or not handler.sqlite_store:
+        raise HTTPException(status_code=503, detail="Storage not available")
+
+    try:
+        settings = handler.sqlite_store.get_settings(user_id)
+        if not settings:
+            # Return default settings if none exist
+            return JSONResponse(content={
+                "user_id": user_id,
+                "settings": {
+                    "voice_enabled": True,
+                    "tts_enabled": True,
+                    "theme": "light",
+                    "language": "en",
+                    "notification_enabled": True
+                }
+            })
+        return JSONResponse(content={"user_id": user_id, "settings": settings})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/settings")
+async def save_user_settings(request: dict):
+    """
+    Save user settings to storage.
+    Body:
+        - user_id: User identifier
+        - settings: Dictionary of settings to save
+    """
+    if not handler or not handler.sqlite_store:
+        raise HTTPException(status_code=503, detail="Storage not available")
+
+    user_id = request.get("user_id", "default")
+    settings = request.get("settings", {})
+
+    if not settings:
+        raise HTTPException(status_code=400, detail="Settings object is required")
+
+    try:
+        handler.sqlite_store.save_settings(user_id, settings)
+        return JSONResponse(content={
+            "success": True,
+            "message": f"Settings saved for user {user_id}",
+            "user_id": user_id,
+            "settings": settings
+        })
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/api/settings")
+async def update_user_settings(request: dict):
+    """
+    Update specific user settings (partial update).
+    Body:
+        - user_id: User identifier
+        - settings: Dictionary of settings to update/merge
+    """
+    if not handler or not handler.sqlite_store:
+        raise HTTPException(status_code=503, detail="Storage not available")
+
+    user_id = request.get("user_id", "default")
+    settings = request.get("settings", {})
+
+    if not settings:
+        raise HTTPException(status_code=400, detail="Settings object is required")
+
+    try:
+        # Get existing settings
+        existing = handler.sqlite_store.get_settings(user_id) or {}
+        # Merge with new settings
+        existing.update(settings)
+        # Save merged settings
+        handler.sqlite_store.save_settings(user_id, existing)
+        return JSONResponse(content={
+            "success": True,
+            "message": f"Settings updated for user {user_id}",
+            "user_id": user_id,
+            "settings": existing
+        })
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/settings")
+async def reset_user_settings(user_id: str = "default"):
+    """
+    Reset user settings to defaults.
+    Query params:
+        - user_id: User identifier (default: "default")
+    """
+    if not handler or not handler.sqlite_store:
+        raise HTTPException(status_code=503, detail="Storage not available")
+
+    try:
+        # Delete user settings (will return defaults on next get)
+        handler.sqlite_store.delete_settings(user_id)
+        return JSONResponse(content={
+            "success": True,
+            "message": f"Settings reset for user {user_id}"
+        })
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# User Profile Management Endpoints (for persistent user information)
+@app.get("/api/profile")
+async def get_user_profile(user_id: str = "default"):
+    """
+    Get user profile information (name, preferences, etc.).
+    Query params:
+        - user_id: User identifier (default: "default")
+    """
+    if not handler or not handler.sqlite_store:
+        raise HTTPException(status_code=503, detail="Storage not available")
+
+    try:
+        profile = handler.sqlite_store.get_user_profile(user_id)
+        if not profile:
+            return JSONResponse(content={
+                "user_id": user_id,
+                "profile": {}
+            })
+        return JSONResponse(content={"user_id": user_id, "profile": profile})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/profile")
+async def save_user_profile(request: dict):
+    """
+    Save or update user profile information.
+    Body:
+        - user_id: User identifier
+        - profile: Dictionary with user information (name, email, preferences, etc.)
+    """
+    if not handler or not handler.sqlite_store:
+        raise HTTPException(status_code=503, detail="Storage not available")
+
+    user_id = request.get("user_id", "default")
+    profile = request.get("profile", {})
+
+    if not profile:
+        raise HTTPException(status_code=400, detail="Profile object is required")
+
+    try:
+        handler.sqlite_store.save_user_profile(user_id, profile)
+
+        # Also store this in persistent memory if available
+        if handler.persistent_memory:
+            try:
+                profile_text = ", ".join([f"{k}: {v}" for k, v in profile.items()])
+                handler.persistent_memory.add_conversation(
+                    user_message=f"User profile updated: {profile_text}",
+                    assistant_message="Profile information stored.",
+                    user_id=user_id,
+                    metadata={"type": "profile_update"}
+                )
+            except Exception as e:
+                logger.debug(f"Failed to store profile in persistent memory: {e}")
+
+        return JSONResponse(content={
+            "success": True,
+            "message": f"Profile saved for user {user_id}",
+            "user_id": user_id,
+            "profile": profile
+        })
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

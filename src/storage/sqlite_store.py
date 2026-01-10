@@ -56,9 +56,31 @@ class SqliteStore:
             )
         ''')
 
+        # Create settings table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS settings (
+                user_id TEXT PRIMARY KEY,
+                settings_json TEXT NOT NULL,
+                created_at TIMESTAMP NOT NULL,
+                updated_at TIMESTAMP NOT NULL
+            )
+        ''')
+
+        # Create user profiles table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS user_profiles (
+                user_id TEXT PRIMARY KEY,
+                profile_json TEXT NOT NULL,
+                created_at TIMESTAMP NOT NULL,
+                updated_at TIMESTAMP NOT NULL
+            )
+        ''')
+
         # Create indices
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_turns_session_id ON turns(session_id)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_settings_user_id ON settings(user_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_profiles_user_id ON user_profiles(user_id)')
 
         conn.commit()
         conn.close()
@@ -159,3 +181,99 @@ class SqliteStore:
         cursor.execute('DELETE FROM sessions WHERE session_id = ?', (session_id,))
         conn.commit()
         conn.close()
+
+    def get_settings(self, user_id: str) -> Optional[Dict[str, Any]]:
+        """Get user settings from storage"""
+        conn = sqlite3.connect(str(self.db_path))
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        cursor.execute('SELECT settings_json FROM settings WHERE user_id = ?', (user_id,))
+        row = cursor.fetchone()
+        conn.close()
+
+        if not row:
+            return None
+
+        try:
+            return json.loads(row['settings_json'])
+        except json.JSONDecodeError:
+            logger.warning(f"Failed to parse settings for user {user_id}")
+            return None
+
+    def save_settings(self, user_id: str, settings: Dict[str, Any]) -> None:
+        """Save or update user settings"""
+        conn = sqlite3.connect(str(self.db_path))
+        cursor = conn.cursor()
+
+        now = datetime.now().isoformat()
+        settings_json = json.dumps(settings)
+
+        cursor.execute('''
+            INSERT INTO settings (user_id, settings_json, created_at, updated_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET
+                settings_json = excluded.settings_json,
+                updated_at = excluded.updated_at
+        ''', (user_id, settings_json, now, now))
+
+        conn.commit()
+        conn.close()
+        logger.debug(f"Settings saved for user {user_id}")
+
+    def delete_settings(self, user_id: str) -> None:
+        """Delete user settings"""
+        conn = sqlite3.connect(str(self.db_path))
+        cursor = conn.cursor()
+        cursor.execute('DELETE FROM settings WHERE user_id = ?', (user_id,))
+        conn.commit()
+        conn.close()
+        logger.debug(f"Settings deleted for user {user_id}")
+
+    def get_user_profile(self, user_id: str) -> Optional[Dict[str, Any]]:
+        """Get user profile information"""
+        conn = sqlite3.connect(str(self.db_path))
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        cursor.execute('SELECT profile_json FROM user_profiles WHERE user_id = ?', (user_id,))
+        row = cursor.fetchone()
+        conn.close()
+
+        if not row:
+            return None
+
+        try:
+            return json.loads(row['profile_json'])
+        except json.JSONDecodeError:
+            logger.warning(f"Failed to parse profile for user {user_id}")
+            return None
+
+    def save_user_profile(self, user_id: str, profile: Dict[str, Any]) -> None:
+        """Save or update user profile"""
+        conn = sqlite3.connect(str(self.db_path))
+        cursor = conn.cursor()
+
+        now = datetime.now().isoformat()
+        profile_json = json.dumps(profile)
+
+        cursor.execute('''
+            INSERT INTO user_profiles (user_id, profile_json, created_at, updated_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET
+                profile_json = excluded.profile_json,
+                updated_at = excluded.updated_at
+        ''', (user_id, profile_json, now, now))
+
+        conn.commit()
+        conn.close()
+        logger.debug(f"User profile saved for user {user_id}")
+
+    def delete_user_profile(self, user_id: str) -> None:
+        """Delete user profile"""
+        conn = sqlite3.connect(str(self.db_path))
+        cursor = conn.cursor()
+        cursor.execute('DELETE FROM user_profiles WHERE user_id = ?', (user_id,))
+        conn.commit()
+        conn.close()
+        logger.debug(f"User profile deleted for user {user_id}")
