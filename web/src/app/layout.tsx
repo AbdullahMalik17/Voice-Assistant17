@@ -10,7 +10,8 @@ export const metadata: Metadata = {
   title: 'NEXUS AI - Voice Assistant',
   description: 'Next-generation AI voice assistant with advanced agentic capabilities',
   icons: {
-    icon: '/favicon.ico',
+    icon: '/favicon.svg',
+    apple: '/favicon.svg',
   },
 };
 
