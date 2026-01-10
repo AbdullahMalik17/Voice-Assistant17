@@ -52,7 +52,7 @@ export function useWebSocket({
     setStatus('connecting');
 
     try {
-      // Append JWT token to WebSocket URL if available
+      // Append JWT token to WebSocket URL if available (optional for authenticated users)
       let wsUrl = url;
       const accessToken = (session as any)?.accessToken;
 
@@ -61,9 +61,10 @@ export function useWebSocket({
         wsUrl = `${url}${separator}token=${accessToken}`;
         console.log('🔐 Connecting to WebSocket with authentication');
       } else {
-        console.log('⚠️  Connecting to WebSocket without authentication');
+        console.log('✅ Connecting to WebSocket (authentication optional)');
       }
 
+      console.log(`Attempting WebSocket connection to: ${wsUrl}`);
       const ws = new WebSocket(wsUrl);
 
       ws.onopen = () => {

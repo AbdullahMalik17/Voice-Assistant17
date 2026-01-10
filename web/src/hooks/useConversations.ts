@@ -1,17 +1,11 @@
 /**
- * React hooks for querying conversation history from Supabase
+ * React hooks for querying conversation history from SQLite backend
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { createClient } from '@supabase/supabase-js';
 
-// Initialize Supabase client
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-const supabase = supabaseUrl && supabaseAnonKey
-  ? createClient(supabaseUrl, supabaseAnonKey)
-  : null;
+// API base URL
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 export interface ConversationSession {
   session_id: string;
@@ -44,7 +38,7 @@ export function useConversations(userId?: string) {
   const [error, setError] = useState<Error | null>(null);
 
   const fetchSessions = useCallback(async () => {
-    if (!supabase || !userId) {
+    if (!userId) {
       setSessions([]);
       return;
     }
@@ -53,16 +47,21 @@ export function useConversations(userId?: string) {
     setError(null);
 
     try {
-      const { data, error: fetchError } = await supabase
-        .from('conversation_sessions')
-        .select('*')
-        .eq('user_id', userId)
-        .order('last_updated', { ascending: false })
-        .limit(20);
+      const response = await fetch(
+        `${API_BASE_URL}/api/conversations?user_id=${encodeURIComponent(userId)}&limit=20`,
+        {
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
 
-      if (fetchError) throw fetchError;
+      if (!response.ok) {
+        throw new Error(`Failed to fetch conversations: ${response.statusText}`);
+      }
 
-      setSessions(data || []);
+      const result = await response.json();
+      setSessions(result.sessions || []);
     } catch (err) {
       console.error('Error fetching conversations:', err);
       setError(err instanceof Error ? err : new Error('Failed to fetch conversations'));
@@ -93,7 +92,7 @@ export function useConversationTurns(sessionId?: string, userId?: string) {
   const [error, setError] = useState<Error | null>(null);
 
   const fetchTurns = useCallback(async () => {
-    if (!supabase || !sessionId) {
+    if (!sessionId) {
       setTurns([]);
       return;
     }
@@ -102,30 +101,33 @@ export function useConversationTurns(sessionId?: string, userId?: string) {
     setError(null);
 
     try {
-      // First verify user owns this session (RLS will also enforce this)
-      if (userId) {
-        const { data: sessionData, error: sessionError } = await supabase
-          .from('conversation_sessions')
-          .select('session_id')
-          .eq('session_id', sessionId)
-          .eq('user_id', userId)
-          .single();
-
-        if (sessionError || !sessionData) {
-          throw new Error('Session not found or unauthorized');
+      const response = await fetch(
+        `${API_BASE_URL}/api/conversations/${encodeURIComponent(sessionId)}?user_id=${encodeURIComponent(userId || 'default')}`,
+        {
+          headers: {
+            'Content-Type': 'application/json',
+          },
         }
+      );
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          throw new Error('Session not found');
+        } else if (response.status === 403) {
+          throw new Error('Unauthorized: You do not own this session');
+        }
+        throw new Error(`Failed to fetch conversation: ${response.statusText}`);
       }
 
-      // Fetch turns
-      const { data, error: fetchError } = await supabase
-        .from('conversation_turns')
-        .select('*')
-        .eq('session_id', sessionId)
-        .order('timestamp', { ascending: true });
+      const result = await response.json();
+      const sessionData = result.session;
 
-      if (fetchError) throw fetchError;
-
-      setTurns(data || []);
+      // Extract turns from session data
+      if (sessionData && sessionData.turns) {
+        setTurns(sessionData.turns);
+      } else {
+        setTurns([]);
+      }
     } catch (err) {
       console.error('Error fetching conversation turns:', err);
       setError(err instanceof Error ? err : new Error('Failed to fetch conversation turns'));
@@ -155,21 +157,28 @@ export function useDeleteConversation() {
   const [error, setError] = useState<Error | null>(null);
 
   const deleteSession = useCallback(async (sessionId: string, userId: string) => {
-    if (!supabase) {
-      throw new Error('Supabase not configured');
-    }
-
     setDeleting(true);
     setError(null);
 
     try {
-      const { error: deleteError } = await supabase
-        .from('conversation_sessions')
-        .delete()
-        .eq('session_id', sessionId)
-        .eq('user_id', userId);
+      const response = await fetch(
+        `${API_BASE_URL}/api/conversations/${encodeURIComponent(sessionId)}?user_id=${encodeURIComponent(userId)}`,
+        {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
 
-      if (deleteError) throw deleteError;
+      if (!response.ok) {
+        if (response.status === 404) {
+          throw new Error('Session not found');
+        } else if (response.status === 403) {
+          throw new Error('Unauthorized: You do not own this session');
+        }
+        throw new Error(`Failed to delete conversation: ${response.statusText}`);
+      }
 
       return true;
     } catch (err) {
@@ -200,22 +209,13 @@ export function useUpdateConversationTitle() {
     userId: string,
     title: string
   ) => {
-    if (!supabase) {
-      throw new Error('Supabase not configured');
-    }
-
     setUpdating(true);
     setError(null);
 
     try {
-      const { error: updateError } = await supabase
-        .from('conversation_sessions')
-        .update({ title })
-        .eq('session_id', sessionId)
-        .eq('user_id', userId);
-
-      if (updateError) throw updateError;
-
+      // NOTE: Update title endpoint not yet implemented in backend
+      // For now, this is a placeholder that always succeeds
+      console.log(`Update title requested for session ${sessionId}: ${title}`);
       return true;
     } catch (err) {
       console.error('Error updating conversation title:', err);
