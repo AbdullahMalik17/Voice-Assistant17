@@ -90,7 +90,7 @@ export function ChatContainer() {
           {
             id: generateId(),
             type: 'system',
-            content: 'Malik link established • System online',
+            content: 'NEXUS link established • System online',
             timestamp: new Date(),
           },
         ]);
@@ -213,7 +213,7 @@ export function ChatContainer() {
 
             <div className="min-w-0">
               <h1 className="text-base sm:text-xl font-bold bg-gradient-to-r from-neon-blue via-neon-purple to-neon-pink bg-clip-text text-transparent font-[family-name:var(--font-orbitron)] truncate">
-                MALIK AI
+                NEXUS AI
               </h1>
               <p className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 truncate">
                 Neural Voice Interface v2.0

@@ -7,7 +7,7 @@ const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 const orbitron = Orbitron({ subsets: ['latin'], variable: '--font-orbitron' });
 
 export const metadata: Metadata = {
-  title: 'MALIK AI - Voice Assistant',
+  title: 'NEXUS AI - Voice Assistant',
   description: 'Next-generation AI voice assistant with advanced agentic capabilities',
   icons: {
     icon: '/favicon.ico',
