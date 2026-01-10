@@ -97,6 +97,24 @@ comtypes>=1.4.1  # For pycaw
 pywin32>=306; sys_platform == 'win32'  # Windows API access
 
 # ===========================
+# Phase 1: Integration APIs
+# ===========================
+slack-sdk>=3.31.0  # Slack integration
+discord.py>=2.4.0  # Discord integration
+notion-client>=2.2.1  # Notion integration
+# Trello uses requests (already included)
+
+# ===========================
+# Phase 2: Performance & Caching
+# ===========================
+redis>=5.0.8  # Caching and session management
+
+# ===========================
+# Phase 3: NLP & Entity Extraction
+# ===========================
+spacy>=3.7.6  # Named Entity Recognition (NER)
+
+# ===========================
 # Testing
 # ===========================
 pytest==7.4.4

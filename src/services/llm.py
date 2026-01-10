@@ -1,9 +1,11 @@
 """
 Language Model (LLM) Service
 Generates responses to user queries using Gemini API with Ollama fallback
+Includes intelligent response caching with TTL-based expiration.
 """
 
 import time
+import os
 from typing import List, Optional, Dict, Any
 
 # Gemini API import
@@ -26,6 +28,7 @@ from ..models.intent import Intent, IntentType
 from ..models.conversation_context import ConversationContext
 from ..utils.logger import EventLogger, MetricsLogger
 from ..agents.tools import ToolRegistry, create_default_registry
+from .llm_cache import get_llm_cache, LLMCache
 
 
 class LLMService:
@@ -54,6 +57,26 @@ class LLMService:
         # Ollama is initialized per-request (no persistent connection needed)
         self.ollama_available = OLLAMA_AVAILABLE and self.mode in ["local", "hybrid"]
 
+        # Initialize LLM response cache with configurable settings
+        cache_ttl = int(os.environ.get("LLM_CACHE_TTL", "1800"))  # 30 min default
+        cache_enabled = os.environ.get("LLM_CACHE_ENABLED", "true").lower() == "true"
+        use_redis = os.environ.get("LLM_CACHE_REDIS", "false").lower() == "true"
+
+        self.cache: Optional[LLMCache] = None
+        if cache_enabled:
+            try:
+                self.cache = get_llm_cache(ttl_seconds=cache_ttl, use_redis=use_redis)
+                self.logger.info(
+                    event='LLM_CACHE_INITIALIZED',
+                    message=f'LLM cache enabled (TTL={cache_ttl}s, Redis={use_redis})'
+                )
+            except Exception as e:
+                self.logger.warning(
+                    event='LLM_CACHE_INIT_FAILED',
+                    message=f'Failed to initialize LLM cache: {e}'
+                )
+                self.cache = None
+
         # Initialize tool registry for function calling
         self.tool_registry = create_default_registry()
         self.logger.info(
@@ -76,7 +99,8 @@ class LLMService:
         context: Optional[ConversationContext] = None
     ) -> str:
         """
-        Generate response to user query
+        Generate response to user query with intelligent caching.
+
         Returns: Generated response text
         """
         if not query or len(query.strip()) == 0:
@@ -86,9 +110,36 @@ class LLMService:
         response_text = ""
         success = False
         mode_used = self.mode
+        from_cache = False
 
         try:
-            # Build prompt with context
+            # Check cache first if enabled
+            if self.cache:
+                context_str = None
+                if context and context.exchanges:
+                    # Use last exchange as context for cache key
+                    context_str = "|".join([
+                        f"{e.user_input}:{e.assistant_response}"
+                        for e in context.exchanges[-2:]  # Last 2 exchanges
+                    ])
+
+                intent_str = intent.intent_type.value if intent else None
+                cached_response = self.cache.get(query, context_str, intent_str)
+
+                if cached_response:
+                    response_text = cached_response
+                    from_cache = True
+                    mode_used = "cache"
+                    success = True
+                    self.logger.info(
+                        event='LLM_CACHE_HIT',
+                        message=f'Cache hit for query: "{query[:50]}..."'
+                    )
+                    self.metrics_logger.record_metric('llm_cache_hit', 1)
+                    # Skip to finally block to log metrics
+                    return response_text
+
+            # Cache miss or disabled - build prompt with context
             full_prompt = self._build_prompt(query, intent, context)
 
             if self.mode == "api":
@@ -125,20 +176,53 @@ class LLMService:
             # Calculate duration
             duration_ms = int((time.time() - start_time) * 1000)
 
+            # Cache the response if it was generated (not from cache)
+            if not from_cache and success and response_text and self.cache:
+                try:
+                    context_str = None
+                    if context and context.exchanges:
+                        context_str = "|".join([
+                            f"{e.user_input}:{e.assistant_response}"
+                            for e in context.exchanges[-2:]
+                        ])
+
+                    intent_str = intent.intent_type.value if intent else None
+                    metadata = {
+                        "mode": mode_used,
+                        "query_length": len(query),
+                        "response_length": len(response_text),
+                        "generation_time_ms": duration_ms
+                    }
+
+                    self.cache.set(query, response_text, context_str, intent_str, metadata)
+                    self.logger.debug(
+                        event='LLM_CACHE_STORED',
+                        message=f'Response cached for query: "{query[:50]}..."'
+                    )
+                    self.metrics_logger.record_metric('llm_cache_miss', 1)
+                except Exception as cache_error:
+                    self.logger.warning(
+                        event='LLM_CACHE_STORE_FAILED',
+                        message=f'Failed to cache response: {cache_error}'
+                    )
+
             # Log event
+            log_event = 'LLM_CACHE_HIT' if from_cache else 'LLM_RESPONSE_GENERATED'
             self.logger.info(
-                event='LLM_RESPONSE_GENERATED',
-                message=f'Response generated: "{response_text[:50]}..."',
+                event=log_event,
+                message=f'Response {"retrieved from cache" if from_cache else "generated"}: "{response_text[:50]}..."',
                 query_length=len(query),
                 response_length=len(response_text),
                 processing_time_ms=duration_ms,
                 mode=mode_used,
                 intent_type=intent.intent_type.value if intent else None,
-                success=success
+                success=success,
+                from_cache=from_cache
             )
 
             # Record metrics
-            self.metrics_logger.record_metric('llm_latency_ms', duration_ms)
+            metric_key = 'llm_cache_latency_ms' if from_cache else 'llm_latency_ms'
+            self.metrics_logger.record_metric(metric_key, duration_ms)
             self.metrics_logger.record_metric('llm_response_length', len(response_text))
 
         return response_text
@@ -406,6 +490,225 @@ Do not just repeat the raw data; speak like a human.
                 error=str(e)
             )
             return False
+
+    # ============================================================================
+    # Streaming Response Support (Phase 2B)
+    # ============================================================================
+
+    def generate_response_stream(
+        self,
+        query: str,
+        intent: Optional[Intent] = None,
+        context: Optional[ConversationContext] = None
+    ):
+        """
+        Generate streaming response using generator pattern.
+        Yields text chunks as they are generated by the LLM.
+
+        This reduces perceived latency by sending first token in 200-500ms
+        instead of waiting 2-5s for complete response.
+
+        Args:
+            query: User query
+            intent: Optional detected intent
+            context: Optional conversation context
+
+        Yields:
+            Text chunks as they are generated by the LLM
+        """
+        if not query or len(query.strip()) == 0:
+            raise ValueError("Query must not be empty")
+
+        # Check cache first - if cached, return full response at once
+        if self.cache:
+            try:
+                context_str = None
+                if context and context.exchanges:
+                    context_str = "|".join([
+                        f"{e.user_input}:{e.assistant_response}"
+                        for e in context.exchanges[-2:]
+                    ])
+
+                intent_str = intent.intent_type.value if intent else None
+                cached_response = self.cache.get(query, context_str, intent_str)
+
+                if cached_response:
+                    # Yield cached response as one chunk
+                    self.logger.info(
+                        event='LLM_STREAM_CACHE_HIT',
+                        message=f'Stream cache hit for query: "{query[:50]}..."'
+                    )
+                    self.metrics_logger.record_metric('llm_stream_cache_hit', 1)
+                    yield cached_response
+                    return
+            except Exception as e:
+                self.logger.warning(
+                    event='LLM_STREAM_CACHE_ERROR',
+                    message=f'Cache lookup error in streaming: {e}'
+                )
+
+        # Build prompt
+        full_prompt = self._build_prompt(query, intent, context)
+
+        start_time = time.time()
+        full_response = ""
+        success = False
+        mode_used = "stream_" + self.mode
+
+        try:
+            if self.mode == "api":
+                # Stream from Gemini API
+                for chunk in self._generate_api_stream(full_prompt):
+                    full_response += chunk
+                    yield chunk
+                success = True
+            elif self.mode == "local":
+                # Stream from Ollama
+                for chunk in self._generate_local_stream(full_prompt):
+                    full_response += chunk
+                    yield chunk
+                success = True
+            else:  # hybrid mode
+                try:
+                    # Try API first
+                    for chunk in self._generate_api_stream(full_prompt):
+                        full_response += chunk
+                        yield chunk
+                    success = True
+                    mode_used = "stream_api"
+                except Exception as api_error:
+                    self.logger.warning(
+                        event='LLM_STREAM_API_FALLBACK',
+                        message=f'API streaming failed, falling back to local: {str(api_error)}'
+                    )
+                    # Fall back to local streaming
+                    full_response = ""
+                    for chunk in self._generate_local_stream(full_prompt):
+                        full_response += chunk
+                        yield chunk
+                    success = True
+                    mode_used = "stream_local"
+
+        except Exception as e:
+            self.logger.error(
+                event='LLM_STREAM_GENERATION_FAILED',
+                message=f'Streaming generation failed: {str(e)}',
+                error=str(e)
+            )
+            yield f"\nError: {str(e)}"
+            return
+
+        finally:
+            # Log streaming metrics
+            duration_ms = int((time.time() - start_time) * 1000)
+
+            # Cache the complete response if streaming succeeded
+            if success and full_response and self.cache:
+                try:
+                    context_str = None
+                    if context and context.exchanges:
+                        context_str = "|".join([
+                            f"{e.user_input}:{e.assistant_response}"
+                            for e in context.exchanges[-2:]
+                        ])
+
+                    intent_str = intent.intent_type.value if intent else None
+                    metadata = {
+                        "mode": mode_used,
+                        "query_length": len(query),
+                        "response_length": len(full_response),
+                        "streaming_time_ms": duration_ms
+                    }
+
+                    self.cache.set(query, full_response, context_str, intent_str, metadata)
+                except Exception as cache_error:
+                    self.logger.warning(
+                        event='LLM_STREAM_CACHE_STORE_FAILED',
+                        message=f'Failed to cache streaming response: {cache_error}'
+                    )
+
+            self.logger.info(
+                event='LLM_STREAM_COMPLETED',
+                message=f'Streaming completed: "{full_response[:50]}..."',
+                query_length=len(query),
+                response_length=len(full_response),
+                processing_time_ms=duration_ms,
+                mode=mode_used,
+                success=success
+            )
+
+            self.metrics_logger.record_metric('llm_stream_latency_ms', duration_ms)
+            self.metrics_logger.record_metric('llm_stream_response_length', len(full_response))
+
+    def _generate_api_stream(self, prompt: str):
+        """
+        Stream response from Gemini API using generator pattern.
+
+        Args:
+            prompt: Complete prompt to send to Gemini
+
+        Yields:
+            Text chunks from the API response
+        """
+        if not GEMINI_AVAILABLE or not self.gemini_client:
+            raise RuntimeError("Gemini API not available for streaming")
+
+        try:
+            gemini_tools = self._tools_to_gemini_format()
+
+            # Use streaming API (generate_content is already streaming-compatible)
+            response = self.gemini_client.models.generate_content(
+                model=self.config.llm.api_model,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    temperature=self.config.llm.temperature,
+                    max_output_tokens=self.config.llm.max_tokens,
+                    tools=gemini_tools
+                ),
+                stream=True  # Enable streaming
+            )
+
+            # Iterate through response chunks
+            for chunk in response:
+                if hasattr(chunk, 'text') and chunk.text:
+                    yield chunk.text
+
+        except Exception as e:
+            raise RuntimeError(f"Gemini API streaming error: {str(e)}")
+
+    def _generate_local_stream(self, prompt: str):
+        """
+        Stream response from Ollama (local) using generator pattern.
+
+        Args:
+            prompt: Complete prompt to send to Ollama
+
+        Yields:
+            Text chunks from the model response
+        """
+        if not OLLAMA_AVAILABLE:
+            raise RuntimeError("Ollama not available for streaming")
+
+        try:
+            # Use Ollama streaming API
+            response = ollama.generate(
+                model=self.config.llm.local_model,
+                prompt=prompt,
+                stream=True,
+                options={
+                    "temperature": self.config.llm.temperature,
+                    "top_p": 0.9,
+                    "top_k": 40
+                }
+            )
+
+            # Iterate through response chunks
+            for chunk in response:
+                if 'response' in chunk and chunk['response']:
+                    yield chunk['response']
+
+        except Exception as e:
+            raise RuntimeError(f"Ollama streaming error: {str(e)}")
 
 
 def create_llm_service(

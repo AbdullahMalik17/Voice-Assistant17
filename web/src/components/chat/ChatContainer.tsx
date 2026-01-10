@@ -221,6 +221,9 @@ export function ChatContainer() {
             </div>
           </div>
 
+
+
+
           {/* Status and controls */}
           <div className="flex items-center gap-1.5 sm:gap-3 flex-shrink-0">
             {/* Connection status - compact on mobile */}

@@ -53,7 +53,8 @@
       "Bash(rm:*)",
       "Bash(npm run build:*)",
       "Bash(git push)",
-      "Bash(pwsh -NoProfile -ExecutionPolicy Bypass -Command \"& ''.\\\\.specify\\\\scripts\\\\powershell\\\\setup-plan.ps1'' -Json\")"
+      "Bash(pwsh -NoProfile -ExecutionPolicy Bypass -Command \"& ''.\\\\.specify\\\\scripts\\\\powershell\\\\setup-plan.ps1'' -Json\")",
+      "Bash(npm install:*)"
     ]
   }
 }

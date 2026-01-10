@@ -3,12 +3,15 @@ Tools Module
 Provides the Tool interface and ToolRegistry for agentic tool execution.
 """
 
+import logging
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Type
+
+logger = logging.getLogger(__name__)
 
 
 class ToolCategory(str, Enum):
@@ -493,7 +496,16 @@ def create_default_registry(sqlite_store=None) -> ToolRegistry:
             OpenGoogleDriveTool,
             BrowserScreenshotTool,
             BrowserClickTool,
-            BrowserTypeTool
+            BrowserTypeTool,
+            # Enhanced browser tools (Phase 1D)
+            FillFormTool,
+            SelectDropdownTool,
+            HandlePopupTool,
+            WaitForNavigationTool,
+            SwitchToIframeTool,
+            GetCookiesTool,
+            SetCookiesTool,
+            ExecuteScriptTool
         )
 
         registry.register(BrowserNavigateTool())
@@ -503,8 +515,21 @@ def create_default_registry(sqlite_store=None) -> ToolRegistry:
         registry.register(BrowserScreenshotTool())
         registry.register(BrowserClickTool())
         registry.register(BrowserTypeTool())
+
+        # Register enhanced browser tools
+        registry.register(FillFormTool())
+        registry.register(SelectDropdownTool())
+        registry.register(HandlePopupTool())
+        registry.register(WaitForNavigationTool())
+        registry.register(SwitchToIframeTool())
+        registry.register(GetCookiesTool())
+        registry.register(SetCookiesTool())
+        registry.register(ExecuteScriptTool())
+
+        logger.info("Browser automation tools (basic + enhanced) registered successfully")
     except ImportError as e:
         # Browser tools optional if Playwright not installed
+        logger.debug(f"Browser tools not available: {e}")
         pass
 
     # Register system control tools
@@ -559,6 +584,94 @@ def create_default_registry(sqlite_store=None) -> ToolRegistry:
         registry.register(UploadDriveFileTool())
     except ImportError as e:
         # Register Gmail/Drive tools optional if Google APIs not installed
+        pass
+
+    # Register Slack communication tools
+    try:
+        from .slack_tools import (
+            SendSlackMessageTool,
+            ListSlackChannelsTool,
+            SearchSlackMessagesTool,
+            GetSlackThreadTool,
+            PostSlackFileTool
+        )
+
+        registry.register(SendSlackMessageTool())
+        registry.register(ListSlackChannelsTool())
+        registry.register(SearchSlackMessagesTool())
+        registry.register(GetSlackThreadTool())
+        registry.register(PostSlackFileTool())
+
+        logger.info("Slack communication tools registered successfully")
+    except ImportError as e:
+        # Slack tools optional if slack-sdk not installed
+        logger.debug(f"Slack tools not available: {e}")
+        pass
+
+    # Register Discord communication tools
+    try:
+        from .discord_tools import (
+            SendDiscordMessageTool,
+            ListDiscordServersTool,
+            PostDiscordEmbedTool,
+            PostDiscordFileTool,
+            SendDiscordThreadMessageTool
+        )
+
+        registry.register(SendDiscordMessageTool())
+        registry.register(ListDiscordServersTool())
+        registry.register(PostDiscordEmbedTool())
+        registry.register(PostDiscordFileTool())
+        registry.register(SendDiscordThreadMessageTool())
+
+        logger.info("Discord communication tools registered successfully")
+    except ImportError as e:
+        # Discord tools optional if discord.py not installed
+        logger.debug(f"Discord tools not available: {e}")
+        pass
+
+    # Register Notion productivity tools
+    try:
+        from .notion_tools import (
+            CreateNotionPageTool,
+            QueryNotionDatabaseTool,
+            UpdateNotionPageTool,
+            SearchNotionTool,
+            RetrieveNotionPageTool
+        )
+
+        registry.register(CreateNotionPageTool())
+        registry.register(QueryNotionDatabaseTool())
+        registry.register(UpdateNotionPageTool())
+        registry.register(SearchNotionTool())
+        registry.register(RetrieveNotionPageTool())
+
+        logger.info("Notion productivity tools registered successfully")
+    except ImportError as e:
+        # Notion tools optional if notion-client not installed
+        logger.debug(f"Notion tools not available: {e}")
+        pass
+
+    # Register Trello productivity tools
+    try:
+        from .trello_tools import (
+            CreateTrelloCardTool,
+            ListTrelloBoardsTool,
+            MoveTrelloCardTool,
+            AddTrelloCommentTool,
+            SearchTrelloTool
+        )
+
+        registry.register(CreateTrelloCardTool())
+        registry.register(ListTrelloBoardsTool())
+        registry.register(MoveTrelloCardTool())
+        registry.register(AddTrelloCommentTool())
+        registry.register(SearchTrelloTool())
+
+        logger.info("Trello productivity tools registered successfully")
+    except ImportError as e:
+        # Trello tools optional if requests not installed or API errors
+        logger.debug(f"Trello tools not available: {e}")
         pass
 
     # Register Desktop Automation Tools
