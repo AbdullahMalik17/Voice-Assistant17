@@ -108,14 +108,15 @@ export async function executeSpotifyAction(query: string): Promise<CommandRespon
   try {
     if (typeof window !== 'undefined') {
       const encodedQuery = encodeURIComponent(query);
-      const spotifyUri = `spotify:search:${encodedQuery}`;
+      // Use the web player URL as a fallback/primary for when desktop app is missing
+      const spotifyWebUrl = `https://open.spotify.com/search/${encodedQuery}`;
       
-      // Attempt to open Spotify desktop app
-      window.location.href = spotifyUri;
+      // Open in a new tab
+      window.open(spotifyWebUrl, '_blank');
       
       return {
         status: 'success',
-        message: `Opening Spotify for "${query}"`,
+        message: `Opening Spotify Web Player for "${query}"`,
         action_type: 'spotify',
       };
     } else {
