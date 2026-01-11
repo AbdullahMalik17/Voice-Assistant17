@@ -19,7 +19,7 @@ context:
   max_exchanges: 5  # Maximum conversation exchanges to remember
   timeout_seconds: 300  # 5 minutes
   topic_shift_threshold: 0.7  # Similarity threshold for topic change detection
-  enable_persistence: false  # Override with .env variable
+  enable_persistence: true  # Override with .env variable
 
 # Network resilience
 network:
@@ -72,7 +72,7 @@ llm:
   local_provider: "ollama"  # Local LLM provider
   local_model: "llama2:7b"  # Local model name
   temperature: 0.7  # Response creativity (0.0-1.0)
-  max_tokens: 4000  # Maximum response length
+  max_tokens: 40000  # Maximum response length
   system_prompt: |
     You are an intelligent and professional Voice Assistant, designed to help users control their computer and access information efficiently.
 
@@ -168,7 +168,7 @@ performance:
 browser:
   enabled: true  # Enable browser automation features
   browser_type: "chromium"  # chromium, firefox, or webkit
-  headless: false  # Run browser without UI (true for servers)
+  headless: true  # Run browser without UI (true for servers)
   default_timeout_ms: 30000  # Default navigation timeout
   screenshot_on_error: true  # Capture screenshots on failures
 
