@@ -16,6 +16,13 @@ try:
 except ImportError:
     GEMINI_AVAILABLE = False
 
+# OpenAI API import
+try:
+    from openai import OpenAI
+    OPENAI_AVAILABLE = True
+except ImportError:
+    OPENAI_AVAILABLE = False
+
 # Ollama import
 try:
     import ollama
@@ -35,7 +42,7 @@ class LLMService:
     """
     Language Model service with hybrid architecture
     Primary: Gemini API
-    Fallback: Ollama (local)
+    Fallback: OpenAI API -> Ollama (local)
     """
 
     def __init__(
@@ -53,6 +60,11 @@ class LLMService:
         self.gemini_client = None
         if GEMINI_AVAILABLE and config.gemini_api_key and self.mode in ["api", "hybrid"]:
             self.gemini_client = genai.Client(api_key=config.gemini_api_key)
+
+        # Initialize OpenAI API
+        self.openai_client = None
+        if OPENAI_AVAILABLE and config.openai_api_key and self.mode in ["api", "hybrid"]:
+            self.openai_client = OpenAI(api_key=config.openai_api_key)
 
         # Ollama is initialized per-request (no persistent connection needed)
         self.ollama_available = OLLAMA_AVAILABLE and self.mode in ["local", "hybrid"]
@@ -302,6 +314,51 @@ class LLMService:
 
         return tools_list
 
+    def _tools_to_openai_format(self) -> List[Dict[str, Any]]:
+        """Convert tool registry tools to OpenAI function declarations"""
+        tools_list = []
+
+        for tool in self.tool_registry._tools.values():
+            desc = tool.get_description()
+
+            # Build properties
+            properties = {}
+            for param in desc.parameters:
+                prop = {
+                    "type": param.type,
+                    "description": param.description
+                }
+                
+                # Handle array items
+                if param.type == "array" and hasattr(param, 'items_type') and param.items_type:
+                    prop["items"] = {
+                        "type": param.items_type
+                    }
+                
+                # Handle enums
+                if param.enum:
+                    prop["enum"] = param.enum
+
+                properties[param.name] = prop
+
+            # Build tool definition
+            tool_def = {
+                "type": "function",
+                "function": {
+                    "name": desc.name,
+                    "description": desc.description,
+                    "parameters": {
+                        "type": "object",
+                        "properties": properties,
+                        "required": [p.name for p in desc.parameters if p.required]
+                    }
+                }
+            }
+
+            tools_list.append(tool_def)
+
+        return tools_list
+
     def _execute_tool(self, function_name: str, arguments: Dict[str, Any]) -> str:
         """Execute a tool and return result as string"""
         tool = self.tool_registry.get(function_name)
@@ -318,79 +375,149 @@ class LLMService:
             return f"Error executing {function_name}: {str(e)}"
 
     def _generate_api(self, prompt: str) -> str:
-        """Generate response using Gemini API with function calling"""
-        if not GEMINI_AVAILABLE:
-            raise RuntimeError("Gemini library not available")
+        """Generate response using Gemini API with fallback to OpenAI"""
+        # Try Gemini first
+        if GEMINI_AVAILABLE and self.gemini_client:
+            try:
+                # Get tools in Gemini format
+                gemini_tools = self._tools_to_gemini_format()
 
-        if self.gemini_client is None:
-            raise RuntimeError("Gemini client not initialized (check API key)")
+                # Generate response with tools
+                response = self.gemini_client.models.generate_content(
+                    model=self.config.llm.api_model,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        temperature=self.config.llm.temperature,
+                        max_output_tokens=self.config.llm.max_tokens,
+                        tools=gemini_tools
+                    )
+                )
+
+                # Check if there are function calls
+                if hasattr(response, 'candidates') and len(response.candidates) > 0:
+                    candidate = response.candidates[0]
+                    if hasattr(candidate, 'content') and hasattr(candidate.content, 'parts'):
+                        for part in candidate.content.parts:
+                            if hasattr(part, 'function_call') and part.function_call:
+                                # Execute the function call
+                                function_name = part.function_call.name
+                                function_args = dict(part.function_call.args) if part.function_call.args else {}
+
+                                self.logger.info(
+                                    event='TOOL_CALLED',
+                                    message=f'Executing tool: {function_name}',
+                                    function_name=function_name,
+                                    arguments=function_args
+                                )
+
+                                # Execute tool
+                                tool_result = self._execute_tool(function_name, function_args)
+
+                                # Call Gemini again with the function result
+                                response = self.gemini_client.models.generate_content(
+                                    model=self.config.llm.api_model,
+                                    contents=[
+                                        {"role": "user", "parts": [{"text": prompt}]},
+                                        {"role": "model", "parts": [{"function_call": part.function_call}]},
+                                        {"role": "function", "parts": [{"function_response": {
+                                            "name": function_name,
+                                            "response": {"result": tool_result}
+                                        }}]}
+                                    ],
+                                    config=types.GenerateContentConfig(
+                                        temperature=self.config.llm.temperature,
+                                        max_output_tokens=self.config.llm.max_tokens,
+                                    )
+                                )
+
+                # Extract text from final response
+                if response.text:
+                    return response.text.strip()
+                else:
+                    self.logger.warning(
+                        event='LLM_GEMINI_EMPTY',
+                        message='Gemini returned empty response, trying fallback'
+                    )
+                    # Fall through to fallback
+            except Exception as e:
+                self.logger.warning(
+                    event='LLM_GEMINI_ERROR',
+                    message=f'Gemini API error: {str(e)}. Switching to OpenAI fallback.'
+                )
+                # Fall through to fallback
+
+        # Fallback to OpenAI
+        if OPENAI_AVAILABLE and self.openai_client:
+            return self._generate_openai(prompt)
+        
+        if not GEMINI_AVAILABLE and not OPENAI_AVAILABLE:
+             raise RuntimeError("No API clients available")
+             
+        raise RuntimeError("All API attempts failed")
+
+    def _generate_openai(self, prompt: str) -> str:
+        """Generate response using OpenAI API"""
+        if not self.openai_client:
+            raise RuntimeError("OpenAI client not initialized")
 
         try:
-            # Get tools in Gemini format
-            gemini_tools = self._tools_to_gemini_format()
+            tools = self._tools_to_openai_format()
+            messages = [{"role": "system", "content": self.config.llm.system_prompt},
+                        {"role": "user", "content": prompt}]
 
-            # Generate response with tools
-            response = self.gemini_client.models.generate_content(
-                model=self.config.llm.api_model,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    temperature=self.config.llm.temperature,
-                    max_output_tokens=self.config.llm.max_tokens,
-                    tools=gemini_tools
-                )
+            response = self.openai_client.chat.completions.create(
+                model="gpt-4o-mini", # Default fallback model
+                messages=messages,
+                tools=tools if tools else None,
+                temperature=self.config.llm.temperature,
+                max_tokens=self.config.llm.max_tokens
             )
 
-            # Check if there are function calls
-            if hasattr(response, 'candidates') and len(response.candidates) > 0:
-                candidate = response.candidates[0]
-                if hasattr(candidate, 'content') and hasattr(candidate.content, 'parts'):
-                    for part in candidate.content.parts:
-                        if hasattr(part, 'function_call') and part.function_call:
-                            # Execute the function call
-                            function_name = part.function_call.name
-                            function_args = dict(part.function_call.args) if part.function_call.args else {}
+            response_message = response.choices[0].message
+            tool_calls = response_message.tool_calls
 
-                            self.logger.info(
-                                event='TOOL_CALLED',
-                                message=f'Executing tool: {function_name}',
-                                function_name=function_name,
-                                arguments=function_args
-                            )
+            if tool_calls:
+                # Append the assistant's response to messages
+                messages.append(response_message)
+                
+                for tool_call in tool_calls:
+                    function_name = tool_call.function.name
+                    function_args = eval(tool_call.function.arguments) # Safe because it comes from LLM? better use json.loads
+                    import json
+                    try:
+                        function_args = json.loads(tool_call.function.arguments)
+                    except:
+                        pass # keep as is or empty dict?
 
-                            # Execute tool
-                            tool_result = self._execute_tool(function_name, function_args)
+                    self.logger.info(
+                        event='TOOL_CALLED_OPENAI',
+                        message=f'Executing tool: {function_name}',
+                        function_name=function_name,
+                        arguments=function_args
+                    )
 
-                            # Call Gemini again with the function result
-                            response = self.gemini_client.models.generate_content(
-                                model=self.config.llm.api_model,
-                                contents=[
-                                    {"role": "user", "parts": [{"text": prompt}]},
-                                    {"role": "model", "parts": [{"function_call": part.function_call}]},
-                                    {"role": "function", "parts": [{"function_response": {
-                                        "name": function_name,
-                                        "response": {"result": tool_result}
-                                    }}]}
-                                ],
-                                config=types.GenerateContentConfig(
-                                    temperature=self.config.llm.temperature,
-                                    max_output_tokens=self.config.llm.max_tokens,
-                                )
-                            )
+                    tool_result = self._execute_tool(function_name, function_args)
 
-            # Extract text from final response
-            if response.text:
-                return response.text.strip()
-            else:
-                # Handle safety filters or empty responses
-                self.logger.warning(
-                    event='LLM_EMPTY_RESPONSE',
-                    message='Gemini returned empty response (possibly filtered)',
-                    finish_reason=getattr(response, 'finish_reason', 'unknown')
+                    messages.append({
+                        "tool_call_id": tool_call.id,
+                        "role": "tool",
+                        "name": function_name,
+                        "content": tool_result
+                    })
+
+                # Get final response
+                response = self.openai_client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=messages,
+                    temperature=self.config.llm.temperature,
+                    max_tokens=self.config.llm.max_tokens
                 )
-                return "I'm sorry, I couldn't generate a response to that."
+                return response.choices[0].message.content.strip()
+
+            return response_message.content.strip()
 
         except Exception as e:
-            raise RuntimeError(f"Gemini API error: {str(e)}")
+            raise RuntimeError(f"OpenAI API error: {str(e)}")
 
     def _generate_local(self, prompt: str) -> str:
         """Generate response using Ollama (local)"""
@@ -652,39 +779,88 @@ Do not just repeat the raw data; speak like a human.
 
     def _generate_api_stream(self, prompt: str):
         """
-        Stream response from Gemini API using generator pattern.
+        Stream response from Gemini API with fallback to OpenAI.
 
         Args:
-            prompt: Complete prompt to send to Gemini
+            prompt: Complete prompt to send to API
 
         Yields:
             Text chunks from the API response
         """
-        if not GEMINI_AVAILABLE or not self.gemini_client:
-            raise RuntimeError("Gemini API not available for streaming")
+        # Try Gemini first
+        if GEMINI_AVAILABLE and self.gemini_client:
+            try:
+                gemini_tools = self._tools_to_gemini_format()
+
+                # Use streaming API
+                response = self.gemini_client.models.generate_content(
+                    model=self.config.llm.api_model,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        temperature=self.config.llm.temperature,
+                        max_output_tokens=self.config.llm.max_tokens,
+                        tools=gemini_tools
+                    ),
+                    stream=True
+                )
+
+                # Iterate through response chunks
+                for chunk in response:
+                    if hasattr(chunk, 'text') and chunk.text:
+                        yield chunk.text
+                return # Success, exit
+            except Exception as e:
+                self.logger.warning(
+                    event='LLM_STREAM_GEMINI_ERROR',
+                    message=f'Gemini streaming error: {str(e)}. Switching to OpenAI fallback.'
+                )
+                # Fall through to fallback
+
+        # Fallback to OpenAI
+        if OPENAI_AVAILABLE and self.openai_client:
+            for chunk in self._generate_openai_stream(prompt):
+                yield chunk
+            return
+
+        if not GEMINI_AVAILABLE and not OPENAI_AVAILABLE:
+            raise RuntimeError("No API clients available for streaming")
+
+        raise RuntimeError("All API streaming attempts failed")
+
+    def _generate_openai_stream(self, prompt: str):
+        """
+        Stream response from OpenAI API.
+
+        Args:
+            prompt: Complete prompt to send to OpenAI
+
+        Yields:
+            Text chunks from the model response
+        """
+        if not self.openai_client:
+            raise RuntimeError("OpenAI client not initialized")
 
         try:
-            gemini_tools = self._tools_to_gemini_format()
+            tools = self._tools_to_openai_format()
+            messages = [{"role": "system", "content": self.config.llm.system_prompt},
+                        {"role": "user", "content": prompt}]
 
-            # Use streaming API (generate_content is already streaming-compatible)
-            response = self.gemini_client.models.generate_content(
-                model=self.config.llm.api_model,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    temperature=self.config.llm.temperature,
-                    max_output_tokens=self.config.llm.max_tokens,
-                    tools=gemini_tools
-                ),
-                stream=True  # Enable streaming
+            response = self.openai_client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=messages,
+                tools=tools if tools else None,
+                temperature=self.config.llm.temperature,
+                max_tokens=self.config.llm.max_tokens,
+                stream=True
             )
 
-            # Iterate through response chunks
             for chunk in response:
-                if hasattr(chunk, 'text') and chunk.text:
-                    yield chunk.text
+                if chunk.choices and chunk.choices[0].delta.content:
+                    yield chunk.choices[0].delta.content
 
         except Exception as e:
-            raise RuntimeError(f"Gemini API streaming error: {str(e)}")
+            raise RuntimeError(f"OpenAI streaming error: {str(e)}")
+
 
     def _generate_local_stream(self, prompt: str):
         """

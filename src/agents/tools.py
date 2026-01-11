@@ -403,7 +403,7 @@ class SetTimerTool(Tool):
 class WebSearchTool(Tool):
     """Search the web"""
     name = "web_search"
-    description = "Search the web for information"
+    description = "Search the web for information using DuckDuckGo"
     category = ToolCategory.INFORMATION
     requires_confirmation = False
 
@@ -414,6 +414,13 @@ class WebSearchTool(Tool):
                 type="string",
                 description="Search query",
                 required=True
+            ),
+            ToolParameter(
+                name="max_results",
+                type="number",
+                description="Maximum number of results to return",
+                required=False,
+                default=5
             )
         ]
         self._examples = [
@@ -422,17 +429,47 @@ class WebSearchTool(Tool):
             "Find information about AI"
         ]
 
-    def execute(self, query: str, **params) -> ToolResult:
-        # In a real implementation, this would call a search API
-        # For now, we acknowledge the request
-        return ToolResult(
-            success=True,
-            data={
-                "message": f"Searching for: {query}",
-                "query": query,
-                "note": "Web search API integration required"
-            }
-        )
+    def execute(self, query: str, max_results: int = 5, **params) -> ToolResult:
+        try:
+            from duckduckgo_search import DDGS
+            
+            results = []
+            with DDGS() as ddgs:
+                # Use text search
+                search_results = list(ddgs.text(query, max_results=max_results))
+                
+                for r in search_results:
+                    results.append({
+                        "title": r.get("title", ""),
+                        "link": r.get("href", ""),
+                        "snippet": r.get("body", "")
+                    })
+            
+            if not results:
+                 return ToolResult(
+                    success=True,
+                    data={"message": f"No results found for: {query}"}
+                )
+
+            return ToolResult(
+                success=True,
+                data={
+                    "query": query,
+                    "results": results,
+                    "count": len(results)
+                }
+            )
+
+        except ImportError:
+            return ToolResult(
+                success=False,
+                error="duckduckgo-search library not installed. Please install it to use web search."
+            )
+        except Exception as e:
+            return ToolResult(
+                success=False,
+                error=f"Web search failed: {str(e)}"
+            )
 
 
 class GetWeatherTool(Tool):
