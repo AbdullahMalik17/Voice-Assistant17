@@ -14,6 +14,7 @@ from typing import Any, Dict, Generator, List, Optional, Tuple
 
 from .tools import ToolRegistry, ToolResult, ToolDescription
 from .guardrails import SafetyGuardrails, SafetyCheck, ActionRisk
+from ..memory.semantic_memory import SemanticMemory, RetrievedMemory
 
 
 class StepStatus(str, Enum):
@@ -153,6 +154,8 @@ User's goal: {goal}
 Current context:
 {context}
 
+{memory_context}
+
 Create a plan as JSON with this structure:
 {{
   "steps": [
@@ -172,6 +175,7 @@ Rules:
 3. Set depends_on to step IDs that must complete first
 4. Include all required parameters for each tool
 5. Order steps logically
+6. Consider the user's history and patterns when planning
 
 Return ONLY valid JSON:'''
 
@@ -186,13 +190,15 @@ class AgenticPlanner:
     - Step-by-step execution with progress reporting
     - Safety checks and confirmation handling
     - Plan persistence and resumption
+    - Memory context injection for intelligent planning
     """
 
     def __init__(
         self,
         tool_registry: ToolRegistry,
         guardrails: Optional[SafetyGuardrails] = None,
-        llm_service=None
+        llm_service=None,
+        memory_service: Optional[SemanticMemory] = None
     ):
         """
         Initialize the planner.
@@ -201,10 +207,12 @@ class AgenticPlanner:
             tool_registry: Registry of available tools
             guardrails: Safety guardrails for action checking
             llm_service: LLM service for plan generation
+            memory_service: Optional semantic memory service for context injection
         """
         self.tools = tool_registry
         self.guardrails = guardrails or SafetyGuardrails()
         self.llm_service = llm_service
+        self.memory_service = memory_service
 
         # Active plans
         self._active_plans: Dict[str, Plan] = {}
@@ -212,7 +220,8 @@ class AgenticPlanner:
     def create_plan(
         self,
         goal: str,
-        context: Optional[str] = None
+        context: Optional[str] = None,
+        user_id: str = "default"
     ) -> Plan:
         """
         Create an execution plan for a goal.
@@ -220,6 +229,7 @@ class AgenticPlanner:
         Args:
             goal: The user's goal in natural language
             context: Optional conversation context
+            user_id: User identifier for memory context retrieval
 
         Returns:
             A Plan object with steps to execute
@@ -229,7 +239,7 @@ class AgenticPlanner:
         # Try LLM-based planning
         if self.llm_service:
             try:
-                steps = self._generate_plan_with_llm(goal, context)
+                steps = self._generate_plan_with_llm(goal, context, user_id)
                 plan = Plan(
                     id=plan_id,
                     goal=goal,
@@ -255,15 +265,20 @@ class AgenticPlanner:
     def _generate_plan_with_llm(
         self,
         goal: str,
-        context: Optional[str]
+        context: Optional[str],
+        user_id: str = "default"
     ) -> List[PlanStep]:
-        """Generate plan using LLM"""
+        """Generate plan using LLM with memory context injection"""
         tools_prompt = self.tools.get_tools_for_prompt()
-
+        
+        # Retrieve relevant memories for this goal
+        memory_context = self._get_memory_context(goal, user_id)
+        
         prompt = PLANNING_PROMPT.format(
             tools=tools_prompt,
             goal=goal,
-            context=context or "No additional context"
+            context=context or "No additional context",
+            memory_context=memory_context
         )
 
         response = self.llm_service.generate(
@@ -298,6 +313,85 @@ class AgenticPlanner:
             steps.append(step)
 
         return steps
+    
+    def _get_memory_context(self, goal: str, user_id: str = "default") -> str:
+        """
+        Retrieve relevant memories and extract patterns to enrich planning context.
+        
+        Args:
+            goal: The user's goal to plan for
+            user_id: User identifier for memory retrieval
+            
+        Returns:
+            Formatted string of relevant memories and patterns to inject into prompt
+        """
+        if not self.memory_service:
+            return ""
+        
+        try:
+            # Retrieve semantically similar memories
+            memories = self.memory_service.retrieve(
+                query=goal,
+                top_k=5,
+                user_id=user_id,
+                min_similarity=0.3
+            )
+            
+            if not memories:
+                return ""
+            
+            # Format memories for prompt injection
+            memory_lines = ["Recent actions and patterns:"]
+            for i, retrieved in enumerate(memories, 1):
+                entry = retrieved.entry
+                memory_lines.append(f"- {entry.content}")
+            
+            # Extract patterns from memories
+            patterns = self._extract_patterns_from_memories(memories)
+            if patterns:
+                memory_lines.append("\nObserved patterns:")
+                for pattern in patterns:
+                    memory_lines.append(f"- {pattern}")
+            
+            return "\n".join(memory_lines)
+        except Exception as e:
+            # Silently fail - planning should work without memory
+            return ""
+    
+    def _extract_patterns_from_memories(self, memories: List[RetrievedMemory]) -> List[str]:
+        """
+        Extract actionable patterns from retrieved memories.
+        
+        Args:
+            memories: List of retrieved memory entries
+            
+        Returns:
+            List of pattern descriptions
+        """
+        patterns = []
+        
+        # Count action frequencies
+        action_counts: Dict[str, int] = {}
+        for retrieved in memories:
+            content = retrieved.entry.content.lower()
+            # Simple pattern detection
+            if "timer" in content:
+                action_counts["timer"] = action_counts.get("timer", 0) + 1
+            if "email" in content or "mail" in content:
+                action_counts["email"] = action_counts.get("email", 0) + 1
+            if "slack" in content:
+                action_counts["slack"] = action_counts.get("slack", 0) + 1
+            if "weather" in content:
+                action_counts["weather"] = action_counts.get("weather", 0) + 1
+            if "browser" in content or "open" in content:
+                action_counts["browsing"] = action_counts.get("browsing", 0) + 1
+        
+        # Generate patterns
+        for action, count in sorted(action_counts.items(), key=lambda x: x[1], reverse=True):
+            if count >= 2:
+                patterns.append(f"User frequently uses {action} ({count}+ recent actions)")
+        
+        return patterns
 
     def _generate_plan_rule_based(self, goal: str) -> List[PlanStep]:
         """Generate plan using rule-based approach"""

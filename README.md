@@ -45,6 +45,27 @@ A privacy-first, cross-platform voice assistant with agentic AI capabilities inc
 - ✅ Raspberry Pi 4/5 (Raspbian)
 - ✅ Web Browsers (Chrome, Firefox, Safari, Edge)
 
+## Documentation
+
+### 📚 Core Guides
+- **[Quickstart Guide](specs/001-voice-assistant-baseline/quickstart.md)** - Get up and running in 5 minutes
+- **[Agentic System Documentation](AGENTIC_IMPLEMENTATION.md)** - Complete guide to the autonomous agentic system
+- **[Integration Guide](AGENTIC_INTEGRATION_GUIDE.md)** - How to integrate agentic components into your app
+
+### 🤖 Agentic System Architecture (v2.1)
+
+The Voice Assistant now includes a complete agentic system with:
+
+- **Autonomous Decision-Making**: Smart trust-based decisions that learn from user patterns
+- **Memory Context Injection**: Plans informed by semantic memory of past actions
+- **Streaming Execution**: Real-time async execution with event streaming to UI
+- **Failure Learning**: Automatic pattern analysis and improvement suggestions
+- **Transparent Reasoning**: Explainable planning with step-by-step justification
+- **State Persistence**: Save/restore execution state for crash recovery
+- **Performance Metrics**: Comprehensive KPI collection and health monitoring
+
+See [AGENTIC_IMPLEMENTATION.md](AGENTIC_IMPLEMENTATION.md) for complete details.
+
 ## Quick Start
 
 See [Quickstart Guide](specs/001-voice-assistant-baseline/quickstart.md) for detailed setup instructions.
