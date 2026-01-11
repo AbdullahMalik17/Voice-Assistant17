@@ -12,6 +12,7 @@ import { generateId } from '@/lib/utils';
 import { ThemeToggle } from '../ui/ThemeToggle';
 import { ConversationSidebar } from './ConversationSidebar';
 import { UserMenu } from '../auth/UserMenu';
+import { processVoiceCommand, detectCommandType } from '@/lib/voice-commands';
 
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000/ws/voice';
 console.log('WS_URL:', WS_URL);
@@ -21,6 +22,31 @@ export function ChatContainer() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  const executeLocalCommand = async (text: string) => {
+    const commandType = detectCommandType(text);
+    if (['spotify', 'search', 'browse'].includes(commandType)) {
+      console.log(`Executing local command: ${commandType}`);
+      const response = await processVoiceCommand({ text });
+      
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: generateId(),
+          type: 'assistant',
+          content: response.message,
+          timestamp: new Date(),
+          metadata: {
+            intent: commandType,
+            tool_execution: true,
+            tool_results: response.data
+          },
+        },
+      ]);
+      return true;
+    }
+    return false;
+  };
 
   const handleMessage = useCallback((wsMessage: WebSocketMessage) => {
     if (wsMessage.type === 'response' || wsMessage.type === 'audio_response') {
@@ -40,6 +66,11 @@ export function ChatContainer() {
           }
           return prev;
         });
+
+        // Try to execute local command based on transcription
+        // We do this to handle things like "Spotify" that backend can't handle
+        // or "Search" if backend search is broken
+        executeLocalCommand(content.transcription);
       }
 
       // Add assistant message
@@ -115,7 +146,7 @@ export function ChatContainer() {
   });
 
   const handleSendText = useCallback(
-    (text: string) => {
+    async (text: string) => {
       if (!text.trim() || status !== 'connected') return;
 
       // Add user message
@@ -130,7 +161,16 @@ export function ChatContainer() {
       ]);
 
       setIsProcessing(true);
+      
+      // Try local execution first for typed commands
+      const handledLocally = await executeLocalCommand(text);
+      
+      // Still send to backend for logging/context, but maybe backend will also reply
       sendText(text);
+      
+      if (handledLocally) {
+        setIsProcessing(false);
+      }
     },
     [sendText, status]
   );

@@ -26,10 +26,14 @@ const SEARCH_KEYWORDS = ['search', 'find', 'look up', 'what is', 'who is', 'tell
 const BROWSE_KEYWORDS = ['open', 'go to', 'navigate', 'visit', 'take screenshot'];
 const CLICK_KEYWORDS = ['click', 'press', 'tap'];
 const TYPE_KEYWORDS = ['type', 'write', 'enter'];
+const SPOTIFY_KEYWORDS = ['spotify', 'play music', 'play song', 'play track', 'play artist'];
 
 export function detectCommandType(text: string): string {
   const lowerText = text.toLowerCase();
 
+  if (SPOTIFY_KEYWORDS.some((k) => lowerText.includes(k))) {
+    return 'spotify';
+  }
   if (SEARCH_KEYWORDS.some((k) => lowerText.includes(k))) {
     return 'search';
   }
@@ -49,10 +53,19 @@ export function detectCommandType(text: string): string {
 export async function executeWebSearch(query: string): Promise<CommandResponse> {
   try {
     const response = await axios.post('/api/search', { query });
+    
+    // Format the answer from Tavily
+    let message = `Found information about "${query}".`;
+    if (response.data.answer) {
+      message = response.data.answer;
+    } else if (response.data.results && response.data.results.length > 0) {
+      message = `I found some results: ${response.data.results[0].title}. ${response.data.results[0].content.substring(0, 100)}...`;
+    }
+
     return {
       status: 'success',
       data: response.data,
-      message: `Found ${response.data.results?.length || 0} results for "${query}"`,
+      message: message,
       action_type: 'web_search',
     };
   } catch (error) {
@@ -87,6 +100,36 @@ export async function executeBrowserAction(action: BrowserAction): Promise<Comma
       status: 'error',
       message: error instanceof Error ? error.message : 'Browser action failed',
       action_type: action.type,
+    };
+  }
+}
+
+export async function executeSpotifyAction(query: string): Promise<CommandResponse> {
+  try {
+    if (typeof window !== 'undefined') {
+      const encodedQuery = encodeURIComponent(query);
+      const spotifyUri = `spotify:search:${encodedQuery}`;
+      
+      // Attempt to open Spotify desktop app
+      window.location.href = spotifyUri;
+      
+      return {
+        status: 'success',
+        message: `Opening Spotify for "${query}"`,
+        action_type: 'spotify',
+      };
+    } else {
+      return {
+        status: 'error',
+        message: 'Cannot open Spotify from server-side context',
+        action_type: 'spotify',
+      };
+    }
+  } catch (error) {
+    return {
+      status: 'error',
+      message: error instanceof Error ? error.message : 'Spotify action failed',
+      action_type: 'spotify',
     };
   }
 }
@@ -139,6 +182,11 @@ export async function processVoiceCommand(context: VoiceCommandContext): Promise
         };
       }
       return executeBrowserAction({ type: 'type', selector, text });
+    }
+
+    case 'spotify': {
+      const query = extractSpotifyQuery(context.text);
+      return executeSpotifyAction(query);
     }
 
     default:
@@ -233,6 +281,20 @@ function extractTypeText(text: string): string | null {
   }
 
   return null;
+}
+
+function extractSpotifyQuery(text: string): string {
+  let query = text;
+  // Case insensitive replacement of keywords
+  query = query.replace(/play music/gi, '');
+  query = query.replace(/play song/gi, '');
+  query = query.replace(/play track/gi, '');
+  query = query.replace(/play artist/gi, '');
+  query = query.replace(/on spotify/gi, '');
+  query = query.replace(/^play/gi, '');
+  query = query.replace(/^spotify/gi, '');
+  
+  return query.trim();
 }
 
 export function formatCommandResponse(response: CommandResponse): string {
