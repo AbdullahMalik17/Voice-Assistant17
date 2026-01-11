@@ -100,7 +100,11 @@ export function ChatContainer() {
           audio.play().catch(console.error);
         } catch (e) {
           console.error('Failed to play audio:', e);
+          speakText(content.text); // Fallback if audio fails to play
         }
+      } else {
+        // Fallback to browser TTS if backend didn't send audio
+        speakText(content.text);
       }
     } else if (wsMessage.type === 'error') {
       setIsProcessing(false);
@@ -113,6 +117,8 @@ export function ChatContainer() {
           timestamp: new Date(),
         },
       ]);
+      // Also speak the error
+      speakText(wsMessage.content.error || 'An error occurred');
     } else if (wsMessage.type === 'system') {
       // Add system message for connection
       if (wsMessage.content.message === 'Connected') {
@@ -128,6 +134,34 @@ export function ChatContainer() {
       }
     }
   }, []);
+
+  // Client-side TTS fallback
+  const speakText = (text: string) => {
+    if (typeof window === 'undefined' || !window.speechSynthesis) return;
+
+    // Cancel any current speech
+    window.speechSynthesis.cancel();
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    
+    // Try to select a better voice
+    const voices = window.speechSynthesis.getVoices();
+    const preferredVoice = voices.find(v => 
+      v.name.includes('Google US English') || 
+      v.name.includes('Samantha') || 
+      v.name.includes('Microsoft Zira')
+    );
+    
+    if (preferredVoice) {
+      utterance.voice = preferredVoice;
+    }
+
+    // Adjust rate/pitch for better naturalness
+    utterance.rate = 1.0;
+    utterance.pitch = 1.0;
+
+    window.speechSynthesis.speak(utterance);
+  };
 
   const { status, sessionId, sendText, sendAudio } = useWebSocket({
     url: WS_URL,

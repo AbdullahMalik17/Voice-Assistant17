@@ -113,7 +113,8 @@ redis>=5.0.8  # Caching and session management
 # Phase 3: NLP & Entity Extraction
 # ===========================
 spacy>=3.7.6  # Named Entity Recognition (NER)
-duckduckgo-search>=5.0.0 # Web Search
+tavily-python>=0.3.0 # Tavily Web Search
+ddgs>=2.0.0 # DuckDuckGo Search (Free fallback)
 
 # ===========================
 # Testing

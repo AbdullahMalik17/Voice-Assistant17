@@ -403,7 +403,7 @@ class SetTimerTool(Tool):
 class WebSearchTool(Tool):
     """Search the web"""
     name = "web_search"
-    description = "Search the web for information using DuckDuckGo"
+    description = "Search the web for information using Tavily"
     category = ToolCategory.INFORMATION
     requires_confirmation = False
 
@@ -430,20 +430,68 @@ class WebSearchTool(Tool):
         ]
 
     def execute(self, query: str, max_results: int = 5, **params) -> ToolResult:
-        try:
-            from duckduckgo_search import DDGS
-            
-            results = []
-            with DDGS() as ddgs:
-                # Use text search
-                search_results = list(ddgs.text(query, max_results=max_results))
+        import os
+        
+        # Try Tavily first if configured
+        api_key = os.getenv("TAVILY_API_KEY")
+        if api_key:
+            try:
+                from tavily import TavilyClient
+                tavily = TavilyClient(api_key=api_key)
                 
+                # Use basic search
+                response = tavily.search(query=query, max_results=max_results)
+                search_results = response.get("results", [])
+                
+                results = []
                 for r in search_results:
                     results.append({
                         "title": r.get("title", ""),
-                        "link": r.get("href", ""),
-                        "snippet": r.get("body", "")
+                        "link": r.get("url", ""),
+                        "snippet": r.get("content", "")
                     })
+                
+                if not results:
+                     return ToolResult(
+                        success=True,
+                        data={"message": f"No results found for: {query}"}
+                    )
+
+                return ToolResult(
+                    success=True,
+                    data={
+                        "query": query,
+                        "results": results,
+                        "count": len(results),
+                        "source": "tavily"
+                    }
+                )
+            except Exception as e:
+                logger.warning(f"Tavily search failed: {e}. Falling back to DuckDuckGo.")
+                # Fall through to DuckDuckGo
+        
+        # Fallback to DuckDuckGo
+        try:
+            try:
+                from duckduckgo_search import DDGS
+            except ImportError:
+                return ToolResult(
+                    success=False,
+                    error="Neither 'tavily-python' (with API key) nor 'duckduckgo_search'/'ddgs' is available."
+                )
+
+            with DDGS() as ddgs:
+                # DDGS.text() returns an iterator/list of dicts
+                # max_results -> max_results
+                ddg_results = list(ddgs.text(query, max_results=max_results))
+            
+            results = []
+            for r in ddg_results:
+                results.append({
+                    "title": r.get("title", ""),
+                    "link": r.get("href", ""),
+                    "snippet": r.get("body", "")
+                })
             
             if not results:
                  return ToolResult(
@@ -456,19 +504,15 @@ class WebSearchTool(Tool):
                 data={
                     "query": query,
                     "results": results,
-                    "count": len(results)
+                    "count": len(results),
+                    "source": "duckduckgo"
                 }
             )
 
-        except ImportError:
-            return ToolResult(
-                success=False,
-                error="duckduckgo-search library not installed. Please install it to use web search."
-            )
         except Exception as e:
             return ToolResult(
                 success=False,
-                error=f"Web search failed: {str(e)}"
+                error=f"Web search failed (Tavily and DuckDuckGo): {str(e)}"
             )
 
 

@@ -58,7 +58,7 @@ class TTSService:
         if config.elevenlabs_api_key and ELEVENLABS_AVAILABLE:
             self.elevenlabs_client = ElevenLabs(api_key=config.elevenlabs_api_key)
 
-    def synthesize(self, text: str, play_audio: bool = True) -> Optional[bytes]:
+    def synthesize(self, text: str, play_audio: bool = False) -> Optional[bytes]:
         """
         Convert text to speech
         Returns audio bytes and optionally plays immediately
