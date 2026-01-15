@@ -1,0 +1,48 @@
+{
+  "banner": "never",
+  "last_logged_in_user": {
+    "host": "https://github.com",
+    "login": "AbdullahMalik17"
+  },
+  "logged_in_users": [
+    {
+      "host": "https://github.com",
+      "login": "AbdullahMalik17"
+    }
+  ],
+  "render_markdown": true,
+  "theme": "auto",
+  "trusted_folders": [
+    "D:\\Voice_Assistant",
+    "C:\\Users\\HP",
+    "D:\\Projects_of_AI_400"
+  ],
+  "mcpServers": {
+    "playwright": {
+      "command": "npx",
+      "args": ["-y", "@microsoft/mcp-server-playwright"]
+    },
+    "chrome-devtools": {
+      "command": "npx",
+      "args": ["-y", "chrome-devtools-mcp@latest"]
+    },
+    "context7": {
+      "command": "npx",
+      "args": ["-y", "@upstash/context7-mcp"],
+      "env": {
+        "CONTEXT7_API_KEY": "YOUR_KEY_HERE"
+      }
+    },
+    "serena": {
+      "command": "uvx",
+      "args": [
+        "--from",
+        "git+https://github.com/oraios/serena",
+        "serena",
+        "start-mcp-server",
+        "--context",
+        "ide-assistant"
+      ]
+    }
+  }
+}

@@ -16,6 +16,7 @@ from typing import Optional, Dict, Any, List
 from dataclasses import dataclass, asdict, field
 from enum import Enum
 import logging
+from .routes.metrics import router as metrics_router
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -825,6 +826,9 @@ app = FastAPI(
     version="2.0.0",
     lifespan=lifespan
 )
+
+# Include routers
+app.include_router(metrics_router)
 
 # Configure CORS
 cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:8000,http://127.0.0.1:3000,http://127.0.0.1:8000").split(",")
